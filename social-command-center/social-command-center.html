@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Command Center</title>
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&f[]=general-sans@500,600,700&display=swap" rel="stylesheet" />
+  <style>
+    :root, [data-theme="light"] {
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.05rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.4rem);
+      --text-xl: clamp(1.45rem, 1.2rem + 1vw, 2rem);
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.25rem;
+      --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem; --space-16: 4rem;
+      --color-bg:#f7f6f2; --color-surface:#fbfbf9; --color-surface-2:#f4f1ed; --color-surface-offset:#ece8e3;
+      --color-border:rgba(40,37,29,.12); --color-divider:rgba(40,37,29,.08); --color-text:#28251d; --color-text-muted:#6d6a63;
+      --color-text-faint:#9e9a93; --color-text-inverse:#faf8f4; --color-primary:#01696f; --color-primary-hover:#0c4e54;
+      --color-success:#437a22; --color-warning:#b06a11; --color-error:#a12c7b; --color-blue:#006494; --color-purple:#7a39bb;
+      --radius-sm:.5rem; --radius-md:.8rem; --radius-lg:1.1rem; --radius-xl:1.5rem; --radius-full:9999px;
+      --shadow-sm:0 1px 2px rgba(40,37,29,.06); --shadow-md:0 8px 24px rgba(40,37,29,.08); --shadow-lg:0 20px 60px rgba(40,37,29,.12);
+      --font-body:'Satoshi', Inter, sans-serif; --font-display:'General Sans', 'Satoshi', sans-serif;
+      --transition:180ms cubic-bezier(.16,1,.3,1);
+    }
+    [data-theme="dark"] {
+      --color-bg:#121314; --color-surface:#181a1c; --color-surface-2:#1f2226; --color-surface-offset:#24282d;
+      --color-border:rgba(233,237,240,.11); --color-divider:rgba(233,237,240,.07); --color-text:#eef2f4; --color-text-muted:#a1adb7;
+      --color-text-faint:#67717a; --color-text-inverse:#0f1214; --color-primary:#5eb8bf; --color-primary-hover:#82cfd5;
+      --color-success:#79c94e; --color-warning:#f1b24a; --color-error:#ef78bf; --color-blue:#71b6ea; --color-purple:#bc93f2;
+      --shadow-sm:0 1px 2px rgba(0,0,0,.25); --shadow-md:0 12px 32px rgba(0,0,0,.28); --shadow-lg:0 24px 72px rgba(0,0,0,.45);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html, body { height:100%; overflow:hidden; }
+    body {
+      font-family:var(--font-body); font-size:var(--text-base); background:
+        radial-gradient(circle at top right, rgba(94,184,191,.12), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(113,182,234,.08), transparent 20%),
+        var(--color-bg);
+      color:var(--color-text); line-height:1.5;
+    }
+    button, input, textarea, select { font:inherit; color:inherit; }
+    button { border:0; background:none; cursor:pointer; }
+    a { color:inherit; text-decoration:none; }
+    :focus-visible { outline:2px solid var(--color-primary); outline-offset:3px; border-radius:var(--radius-sm); }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .app {
+      display:grid; grid-template-columns: 288px 1fr; grid-template-rows:auto 1fr; height:100dvh;
+    }
+    .sidebar {
+      grid-row:1 / -1; display:flex; flex-direction:column; gap:var(--space-6); padding:var(--space-6);
+      background:color-mix(in srgb, var(--color-surface) 94%, transparent);
+      border-right:1px solid var(--color-border); overflow-y:auto; overscroll-behavior:contain;
+      backdrop-filter: blur(18px);
+    }
+    .brand { display:flex; align-items:center; gap:var(--space-3); }
+    .brand-mark {
+      width:42px; height:42px; border-radius:14px; display:grid; place-items:center; background:linear-gradient(135deg, var(--color-primary), var(--color-blue));
+      color:#fff; box-shadow:var(--shadow-md);
+    }
+    .brand h1 { font:700 var(--text-lg)/1.05 var(--font-display); letter-spacing:-.03em; }
+    .brand p { color:var(--color-text-muted); font-size:var(--text-xs); margin-top:var(--space-1); }
+    .nav-group { display:grid; gap:var(--space-2); }
+    .nav-label { font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.14em; color:var(--color-text-faint); }
+    .nav-item {
+      display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); width:100%; padding:.9rem 1rem; border-radius:var(--radius-lg);
+      color:var(--color-text-muted); transition:background var(--transition), color var(--transition), transform var(--transition);
+    }
+    .nav-item:hover, .nav-item.active { background:var(--color-surface-2); color:var(--color-text); transform:translateY(-1px); }
+    .nav-left { display:flex; align-items:center; gap:var(--space-3); }
+    .pill { padding:.28rem .55rem; border-radius:var(--radius-full); font-size:var(--text-xs); background:var(--color-surface-offset); color:var(--color-text-muted); }
+    .sidebar-card {
+      margin-top:auto; padding:var(--space-5); border-radius:var(--radius-xl); background:linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 16%, var(--color-surface)), var(--color-surface-2)); border:1px solid var(--color-border); box-shadow:var(--shadow-md);
+    }
+    .sidebar-card h2 { font-size:var(--text-lg); margin-bottom:var(--space-2); }
+    .sidebar-card p { color:var(--color-text-muted); font-size:var(--text-sm); margin-bottom:var(--space-4); }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:.6rem; padding:.85rem 1rem; border-radius:var(--radius-lg); transition:all var(--transition); }
+    .btn-primary { background:var(--color-primary); color:var(--color-text-inverse); box-shadow:var(--shadow-sm); }
+    .btn-primary:hover { background:var(--color-primary-hover); transform:translateY(-1px); }
+    .btn-secondary { background:var(--color-surface-2); border:1px solid var(--color-border); }
+    .header {
+      grid-column:2; position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:var(--space-4);
+      padding:var(--space-5) var(--space-6); border-bottom:1px solid var(--color-border); background:color-mix(in srgb, var(--color-bg) 82%, transparent); backdrop-filter: blur(18px);
+    }
+    .header-main h2 { font:700 var(--text-xl)/1.02 var(--font-display); letter-spacing:-.04em; }
+    .header-main p { color:var(--color-text-muted); margin-top:var(--space-1); font-size:var(--text-sm); }
+    .header-actions { display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; }
+    .search {
+      min-width:320px; display:flex; align-items:center; gap:var(--space-3); padding:.9rem 1rem; border-radius:var(--radius-full); border:1px solid var(--color-border); background:var(--color-surface);
+      color:var(--color-text-muted);
+    }
+    .search input { background:transparent; border:0; outline:0; width:100%; }
+    .icon-btn { width:44px; height:44px; display:grid; place-items:center; border-radius:50%; background:var(--color-surface); border:1px solid var(--color-border); }
+    .main { grid-column:2; overflow-y:auto; overscroll-behavior:contain; padding:var(--space-6); }
+    .hero-grid, .kpi-grid, .content-grid, .detail-grid { display:grid; gap:var(--space-5); }
+    .hero-grid { grid-template-columns: 1.4fr .95fr; margin-bottom:var(--space-6); }
+    .panel {
+      background:color-mix(in srgb, var(--color-surface) 94%, transparent); border:1px solid var(--color-border); border-radius:var(--radius-xl); box-shadow:var(--shadow-sm); backdrop-filter: blur(12px);
+    }
+    .hero-card { padding:var(--space-6); position:relative; overflow:hidden; }
+    .hero-card::after {
+      content:""; position:absolute; inset:auto -8% -26% auto; width:240px; height:240px; border-radius:50%; background:radial-gradient(circle, rgba(94,184,191,.28), transparent 68%);
+    }
+    .eyebrow { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .7rem; border-radius:var(--radius-full); background:var(--color-surface-2); font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:var(--space-4); }
+    .hero-card h3 { font:700 clamp(1.8rem, 1.4rem + 1vw, 2.6rem)/1 var(--font-display); letter-spacing:-.05em; max-width:12ch; }
+    .hero-card p { color:var(--color-text-muted); max-width:62ch; margin-top:var(--space-4); }
+    .hero-actions { display:flex; gap:var(--space-3); flex-wrap:wrap; margin-top:var(--space-5); }
+    .mini-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-3); margin-top:var(--space-6); }
+    .mini { padding:var(--space-4); border-radius:var(--radius-lg); background:var(--color-surface-2); border:1px solid var(--color-border); }
+    .mini span { display:block; color:var(--color-text-faint); font-size:var(--text-xs); margin-bottom:.35rem; text-transform:uppercase; letter-spacing:.08em; }
+    .mini strong { font-size:var(--text-lg); font-variant-numeric:tabular-nums lining-nums; }
+    .assistant-card { padding:var(--space-6); display:flex; flex-direction:column; gap:var(--space-5); }
+    .assistant-top { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); }
+    .assistant-orb {
+      width:64px; height:64px; border-radius:20px; display:grid; place-items:center; background:linear-gradient(135deg, rgba(94,184,191,.35), rgba(188,147,242,.28)); border:1px solid var(--color-border);
+    }
+    .assistant-quote { padding:var(--space-4); border-radius:var(--radius-lg); background:var(--color-surface-2); color:var(--color-text-muted); font-size:var(--text-sm); }
+    .assistant-list { display:grid; gap:var(--space-3); }
+    .assistant-item { display:flex; gap:var(--space-3); align-items:flex-start; padding-bottom:var(--space-3); border-bottom:1px solid var(--color-divider); }
+    .assistant-item:last-child { border-bottom:0; padding-bottom:0; }
+    .dot { width:10px; height:10px; border-radius:50%; margin-top:.45rem; background:var(--color-primary); box-shadow:0 0 0 6px rgba(94,184,191,.12); }
+    .kpi-grid { grid-template-columns: repeat(4, minmax(0,1fr)); margin-bottom:var(--space-6); }
+    .kpi { padding:var(--space-5); }
+    .kpi-top, .section-head, .table-head, .calendar-head { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); }
+    .kpi label, .muted { color:var(--color-text-muted); font-size:var(--text-sm); }
+    .kpi strong { display:block; margin:.5rem 0; font-size:clamp(1.5rem, 1.25rem + 1vw, 2.3rem); letter-spacing:-.04em; font-variant-numeric:tabular-nums lining-nums; }
+    .delta { display:inline-flex; align-items:center; gap:.45rem; font-size:var(--text-xs); padding:.3rem .55rem; border-radius:var(--radius-full); }
+    .up { background:rgba(121,201,78,.12); color:var(--color-success); }
+    .warn { background:rgba(241,178,74,.12); color:var(--color-warning); }
+    .chart { margin-top:var(--space-4); display:flex; align-items:flex-end; gap:6px; height:74px; }
+    .bar { flex:1; border-radius:999px 999px 6px 6px; background:linear-gradient(180deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 40%, transparent)); opacity:.92; }
+    .content-grid { grid-template-columns: 1.2fr .8fr; margin-bottom:var(--space-6); }
+    .section-card { padding:var(--space-5); }
+    .section-head { margin-bottom:var(--space-5); }
+    .section-head h3, .table-head h3, .calendar-head h3 { font:700 var(--text-lg)/1.1 var(--font-display); letter-spacing:-.03em; }
+    .platform-list, .deal-list, .calendar-list { display:grid; gap:var(--space-3); }
+    .platform-row, .deal-item, .calendar-item {
+      display:grid; gap:var(--space-3); align-items:center; padding:var(--space-4); border-radius:var(--radius-lg); background:var(--color-surface-2); border:1px solid var(--color-border);
+    }
+    .platform-row { grid-template-columns: 1.4fr .9fr .8fr .8fr; }
+    .platform-title { display:flex; align-items:center; gap:var(--space-3); }
+    .logo-dot { width:38px; height:38px; border-radius:12px; display:grid; place-items:center; font-size:var(--text-sm); font-weight:700; }
+    .logo-tiktok { background:rgba(113,182,234,.12); color:var(--color-blue); }
+    .logo-youtube { background:rgba(239,120,191,.12); color:var(--color-error); }
+    .logo-instagram { background:rgba(188,147,242,.12); color:var(--color-purple); }
+    .logo-facebook { background:rgba(94,184,191,.12); color:var(--color-primary); }
+    .meter { height:10px; border-radius:999px; overflow:hidden; background:var(--color-surface-offset); margin-top:.45rem; }
+    .meter > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, var(--color-primary), var(--color-blue)); }
+    .insight-card {
+      padding:var(--space-5); background:linear-gradient(180deg, rgba(94,184,191,.12), transparent 48%), var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-xl); margin-top:var(--space-5);
+    }
+    .insight-card ul { list-style:none; display:grid; gap:var(--space-3); margin-top:var(--space-4); }
+    .insight-card li { color:var(--color-text-muted); }
+    .detail-grid { grid-template-columns: 1fr .95fr; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:1rem .9rem; font-size:var(--text-sm); }
+    th { color:var(--color-text-muted); font-weight:500; border-bottom:1px solid var(--color-divider); }
+    td { border-bottom:1px solid var(--color-divider); }
+    tbody tr:hover { background:rgba(94,184,191,.05); }
+    .calendar-item { grid-template-columns:auto 1fr auto; }
+    .time-chip { padding:.45rem .7rem; border-radius:var(--radius-full); background:var(--color-surface-offset); font-size:var(--text-xs); color:var(--color-text-muted); }
+    .footer-note { margin-top:var(--space-6); color:var(--color-text-faint); font-size:var(--text-xs); }
+    .mobile-toggle { display:none; }
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .content-grid, .hero-grid, .detail-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 84px 1fr; }
+      .sidebar { padding:var(--space-4); }
+      .brand-copy, .nav-item span:not(.pill), .sidebar-card { display:none; }
+      .nav-item { justify-content:center; padding:.9rem; }
+      .nav-left { justify-content:center; }
+      .search { min-width:unset; width:100%; }
+      .header { flex-direction:column; align-items:stretch; }
+      .header-actions { justify-content:space-between; }
+    }
+    @media (max-width: 680px) {
+      html, body { overflow:auto; }
+      .app { display:block; height:auto; }
+      .sidebar {
+        position:sticky; top:0; z-index:20; flex-direction:row; align-items:center; overflow:auto; white-space:nowrap; padding:var(--space-3) var(--space-4);
+      }
+      .nav-group { display:flex; gap:var(--space-2); }
+      .nav-label { display:none; }
+      .nav-item { width:auto; }
+      .header { position:static; padding:var(--space-4); }
+      .main { overflow:visible; padding:var(--space-4); }
+      .kpi-grid { grid-template-columns:1fr; }
+      .mini-metrics { grid-template-columns:1fr; }
+      .platform-row { grid-template-columns:1fr; }
+      .calendar-item { grid-template-columns:1fr; }
+      .search { order:3; }
+      .header-actions { width:100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="sr-only" href="#main">Skip to content</a>
+  <div class="app">
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Social Command Center logo">
+            <path d="M4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M7 12C7 9.24 9.24 7 12 7C14.76 7 17 9.24 17 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M10 12C10 10.9 10.9 10 12 10C13.1 10 14 10.9 14 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <circle cx="12" cy="16.5" r="2.2" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <h1>Social Command Center</h1>
+          <p>Creator OS for accounts, content, analytics, and revenue.</p>
+        </div>
+      </div>
+
+      <nav class="nav-group" aria-label="Workspace sections">
+        <div class="nav-label">Workspace</div>
+        <button class="nav-item active"><span class="nav-left"><span>◈</span><span>Overview</span></span><span class="pill">Live</span></button>
+        <button class="nav-item"><span class="nav-left"><span>◎</span><span>Accounts</span></span><span class="pill">27</span></button>
+        <button class="nav-item"><span class="nav-left"><span>▣</span><span>Calendar</span></span><span class="pill">12</span></button>
+        <button class="nav-item"><span class="nav-left"><span>◌</span><span>Inbox</span></span><span class="pill">18</span></button>
+        <button class="nav-item"><span class="nav-left"><span>◇</span><span>Analytics</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>✦</span><span>AI Studio</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>△</span><span>Revenue</span></span></button>
+      </nav>
+
+      <nav class="nav-group" aria-label="Connected surfaces">
+        <div class="nav-label">Platforms</div>
+        <button class="nav-item"><span class="nav-left"><span>T</span><span>TikTok</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>Y</span><span>YouTube</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>I</span><span>Instagram</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>F</span><span>Facebook</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>X</span><span>X</span></span></button>
+        <button class="nav-item"><span class="nav-left"><span>P</span><span>Pinterest</span></span></button>
+      </nav>
+
+      <section class="sidebar-card" aria-labelledby="coach-title">
+        <h2 id="coach-title">AI coach on standby</h2>
+        <p>Turn disconnected platform data into next actions, campaign ideas, and voice-guided growth briefings.</p>
+        <button class="btn btn-primary">Open growth briefing</button>
+      </section>
+    </aside>
+
+    <header class="header">
+      <div class="header-main">
+        <h2>Run your creator business from one screen.</h2>
+        <p>Monitor accounts, compare platforms, plan campaigns, manage deals, and ask the assistant what to do next.</p>
+      </div>
+      <div class="header-actions">
+        <label class="search" aria-label="Search the workspace">
+          <span aria-hidden="true">⌘K</span>
+          <input type="text" value="Search accounts, deals, campaigns, posts" aria-label="Search" readonly />
+        </label>
+        <button class="icon-btn" data-theme-toggle aria-label="Switch theme">☼</button>
+        <button class="btn btn-secondary">Connect platform</button>
+        <button class="btn btn-primary">Create campaign</button>
+      </div>
+    </header>
+
+    <main class="main" id="main">
+      <section class="hero-grid">
+        <article class="panel hero-card">
+          <span class="eyebrow">Unified control center</span>
+          <h3>The operating system for modern creators and brands.</h3>
+          <p>This concept combines multi-account publishing, analytics intelligence, email collaboration, revenue tracking, planning, and strategy into one responsive workspace for desktop, tablet, and mobile.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary">Preview AI strategy flow</button>
+            <button class="btn btn-secondary">Open investor view</button>
+          </div>
+          <div class="mini-metrics" aria-label="At a glance metrics">
+            <div class="mini"><span>Connected assets</span><strong>84</strong></div>
+            <div class="mini"><span>Weekly reach</span><strong>18.7M</strong></div>
+            <div class="mini"><span>Attributed revenue</span><strong>$214K</strong></div>
+          </div>
+        </article>
+
+        <aside class="panel assistant-card" aria-labelledby="assistant-title">
+          <div class="assistant-top">
+            <div>
+              <div class="muted">Voice AI briefing</div>
+              <h3 id="assistant-title">What changed this week</h3>
+            </div>
+            <div class="assistant-orb" aria-hidden="true">◉</div>
+          </div>
+          <div class="assistant-quote">“Short-form clips are driving the fastest follower growth on TikTok, while long-form YouTube tutorials are producing the highest revenue per viewer. Shift two production blocks toward cross-platform episode cuts.”</div>
+          <div class="assistant-list">
+            <div class="assistant-item"><span class="dot"></span><div><strong>Idea engine</strong><p class="muted">Generate hooks, captions, thumbnail angles, and campaign concepts by platform.</p></div></div>
+            <div class="assistant-item"><span class="dot"></span><div><strong>Plain-language analytics</strong><p class="muted">Translate charts into actions, risks, and experiments the team can execute today.</p></div></div>
+            <div class="assistant-item"><span class="dot"></span><div><strong>Email copilot</strong><p class="muted">Draft brand replies, flag sponsorships, and organize high-value conversations.</p></div></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="kpi-grid" aria-label="Key performance indicators">
+        <article class="panel kpi">
+          <div class="kpi-top"><label>Total engagement</label><span class="delta up">↗ 18.4%</span></div>
+          <strong>4.82M</strong>
+          <div class="muted">Across all connected profiles this week.</div>
+          <div class="chart" aria-hidden="true">
+            <span class="bar" style="height:26%"></span><span class="bar" style="height:45%"></span><span class="bar" style="height:37%"></span><span class="bar" style="height:68%"></span><span class="bar" style="height:81%"></span><span class="bar" style="height:61%"></span><span class="bar" style="height:88%"></span>
+          </div>
+        </article>
+        <article class="panel kpi">
+          <div class="kpi-top"><label>Audience growth</label><span class="delta up">↗ 9.2%</span></div>
+          <strong>+126K</strong>
+          <div class="muted">Net new followers and subscribers.</div>
+          <div class="chart" aria-hidden="true">
+            <span class="bar" style="height:20%"></span><span class="bar" style="height:32%"></span><span class="bar" style="height:48%"></span><span class="bar" style="height:52%"></span><span class="bar" style="height:64%"></span><span class="bar" style="height:70%"></span><span class="bar" style="height:84%"></span>
+          </div>
+        </article>
+        <article class="panel kpi">
+          <div class="kpi-top"><label>Monetized conversions</label><span class="delta warn">↘ 2.1%</span></div>
+          <strong>7.9%</strong>
+          <div class="muted">Lower than target, mostly from Instagram story drop-off.</div>
+          <div class="chart" aria-hidden="true">
+            <span class="bar" style="height:80%"></span><span class="bar" style="height:73%"></span><span class="bar" style="height:70%"></span><span class="bar" style="height:66%"></span><span class="bar" style="height:62%"></span><span class="bar" style="height:57%"></span><span class="bar" style="height:51%"></span>
+          </div>
+        </article>
+        <article class="panel kpi">
+          <div class="kpi-top"><label>Inbox opportunities</label><span class="delta up">↗ 12 new</span></div>
+          <strong>31</strong>
+          <div class="muted">Brand deals, creator collaborations, and fan community requests.</div>
+          <div class="chart" aria-hidden="true">
+            <span class="bar" style="height:31%"></span><span class="bar" style="height:38%"></span><span class="bar" style="height:51%"></span><span class="bar" style="height:60%"></span><span class="bar" style="height:58%"></span><span class="bar" style="height:69%"></span><span class="bar" style="height:90%"></span>
+          </div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel section-card">
+          <div class="section-head">
+            <div>
+              <div class="muted">Platform comparison</div>
+              <h3>See which channels create value</h3>
+            </div>
+            <button class="btn btn-secondary">Export report</button>
+          </div>
+          <div class="platform-list">
+            <div class="platform-row">
+              <div class="platform-title"><div class="logo-dot logo-tiktok">T</div><div><strong>TikTok</strong><div class="muted">Fastest reach growth</div></div></div>
+              <div><strong>8.2M</strong><div class="muted">Views</div></div>
+              <div><strong>12.8%</strong><div class="muted">Engagement</div></div>
+              <div><strong>91</strong><div class="muted">Posts</div></div>
+            </div>
+            <div class="platform-row">
+              <div class="platform-title"><div class="logo-dot logo-youtube">Y</div><div><strong>YouTube</strong><div class="muted">Best revenue efficiency</div></div></div>
+              <div><strong>$96K</strong><div class="muted">Revenue</div></div>
+              <div><strong>14m 12s</strong><div class="muted">Avg. watch</div></div>
+              <div><strong>24</strong><div class="muted">Uploads</div></div>
+            </div>
+            <div class="platform-row">
+              <div class="platform-title"><div class="logo-dot logo-instagram">I</div><div><strong>Instagram</strong><div class="muted">Top brand conversion lane</div></div></div>
+              <div><strong>3.8%</strong><div class="muted">CTR</div></div>
+              <div><strong>42K</strong><div class="muted">Saves</div></div>
+              <div><strong>67</strong><div class="muted">Stories</div></div>
+            </div>
+            <div class="platform-row">
+              <div class="platform-title"><div class="logo-dot logo-facebook">F</div><div><strong>Facebook</strong><div class="muted">Community retention</div></div></div>
+              <div><strong>18 groups</strong><div class="muted">Managed</div></div>
+              <div><strong>6.4%</strong><div class="muted">Comment rate</div></div>
+              <div><strong>11</strong><div class="muted">Pages</div></div>
+            </div>
+          </div>
+          <div class="insight-card">
+            <strong>AI interpretation</strong>
+            <ul>
+              <li>Short-form content should seed long-form YouTube funnels instead of standing alone.</li>
+              <li>Instagram saves are strong enough to support a paid product launch sequence next month.</li>
+              <li>Facebook groups are ideal for high-trust community offers and recurring member programs.</li>
+            </ul>
+          </div>
+        </article>
+
+        <aside class="panel section-card">
+          <div class="section-head">
+            <div>
+              <div class="muted">Pipeline</div>
+              <h3>Brand deals and inbox</h3>
+            </div>
+            <button class="btn btn-secondary">Open inbox</button>
+          </div>
+          <div class="deal-list">
+            <div class="deal-item">
+              <div><strong>Podcast sponsor renewal</strong><div class="muted">Needs counteroffer draft and revised deliverables.</div></div>
+              <span class="delta up">High value</span>
+            </div>
+            <div class="deal-item">
+              <div><strong>UGC package request</strong><div class="muted">AI suggests bundle pricing across TikTok, Reels, and Shorts.</div></div>
+              <span class="delta warn">Due today</span>
+            </div>
+            <div class="deal-item">
+              <div><strong>Fan community partnership</strong><div class="muted">Potential newsletter + live stream crossover opportunity.</div></div>
+              <span class="delta up">Warm lead</span>
+            </div>
+          </div>
+          <div class="insight-card">
+            <strong>Email assistant actions</strong>
+            <ul>
+              <li>Draft replies with brand-safe tone and platform-specific deliverables.</li>
+              <li>Detect money language, urgency, and missing contract details before sending.</li>
+              <li>Convert promising threads into campaigns, tasks, and calendar events automatically.</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+
+      <section class="detail-grid">
+        <article class="panel section-card">
+          <div class="table-head">
+            <div>
+              <div class="muted">Content intelligence</div>
+              <h3>Top-performing content mix</h3>
+            </div>
+            <button class="btn btn-secondary">Open AI planner</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Format</th><th>Primary goal</th><th>Best platform</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Short-form cutdowns</td><td>Follower growth</td><td>TikTok / Reels</td><td>Increase volume by 20%</td></tr>
+              <tr><td>Deep-dive tutorials</td><td>Revenue and trust</td><td>YouTube</td><td>Repurpose into clips</td></tr>
+              <tr><td>Carousel explainers</td><td>Saves and shares</td><td>Instagram</td><td>Attach lead magnet CTA</td></tr>
+              <tr><td>Community prompts</td><td>Retention</td><td>Facebook Groups</td><td>Schedule twice weekly</td></tr>
+              <tr><td>Idea boards</td><td>Discovery</td><td>Pinterest</td><td>Link to evergreen offers</td></tr>
+            </tbody>
+          </table>
+        </article>
+
+        <aside class="panel section-card">
+          <div class="calendar-head">
+            <div>
+              <div class="muted">Calendar</div>
+              <h3>Upcoming campaign flow</h3>
+            </div>
+            <button class="btn btn-secondary">Month view</button>
+          </div>
+          <div class="calendar-list">
+            <div class="calendar-item"><span class="time-chip">Mon 9:00</span><div><strong>Launch teaser sequence</strong><div class="muted">YouTube Short, TikTok clip, Instagram Reel.</div></div><span class="pill">Scheduled</span></div>
+            <div class="calendar-item"><span class="time-chip">Wed 1:00</span><div><strong>Brand partner check-in</strong><div class="muted">AI-prepared notes and sponsorship status.</div></div><span class="pill">Meeting</span></div>
+            <div class="calendar-item"><span class="time-chip">Thu 6:30</span><div><strong>Live community Q&A</strong><div class="muted">Facebook group and email reminder sync.</div></div><span class="pill">Live</span></div>
+            <div class="calendar-item"><span class="time-chip">Sat 10:00</span><div><strong>Revenue review briefing</strong><div class="muted">Voice recap of channel-by-channel performance.</div></div><span class="pill">AI brief</span></div>
+          </div>
+        </aside>
+      </section>
+
+      <p class="footer-note">Concept demo: a unified dashboard for creators, influencers, brands, and digital entrepreneurs managing multiple platforms, business workflows, and growth decisions from one interface.</p>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const navItems = document.querySelectorAll('.nav-item');
+      navItems.forEach(item => {
+        item.addEventListener('click', () => {
+          navItems.forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+        });
+      });
+      const toggle = document.querySelector('[data-theme-toggle]');
+      const root = document.documentElement;
+      let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.setAttribute('data-theme', theme);
+      toggle.textContent = theme === 'dark' ? '☼' : '◐';
+      toggle.addEventListener('click', () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', theme);
+        toggle.textContent = theme === 'dark' ? '☼' : '◐';
+        toggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      });
+    })();
+  </script>
+</body>
+</html>
