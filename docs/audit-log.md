@@ -317,6 +317,28 @@ same redaction approach as above, so no duplicate/stale text remains
 underneath. Verified: 20 unique bodies across 20 cards (was 1), title page
 and instructions untouched, same fonts/colors/layout as the original.
 
+## 2026-09-02 (cont'd) — Generated real mazes for the Bible Verse Maze Book
+
+`03_Bible_Verse_Maze_Book.pdf` (Pack 2, item 3) had 10 "puzzle" pages that
+were each just an empty bordered box and a blank "Verse: ____" line — no
+maze, flagged above. Fixed both problems:
+
+- **Filled in the verse reference** on each of the 10 pages (John 3:16,
+  Psalm 23:1, Philippians 4:13, Joshua 1:9, Proverbs 3:5, Psalm 118:24,
+  1 John 4:19, Matthew 5:16, Psalm 46:1, Galatians 5:22 — short, commonly
+  memorized verses fitting a kids' activity book) using the same redaction
+  approach as the other fixes.
+- **Generated an actual maze on each page**: an 11x9 grid, one distinct
+  maze per puzzle via randomized depth-first spanning-tree generation (a
+  different seed per page), rendered as vector line art in the existing
+  box, with a marked START and FINISH. A spanning-tree maze has exactly one
+  path between any two cells by construction, so solvability isn't just
+  visual — verified programmatically with a BFS solve from start to finish
+  for all 10 generated mazes before shipping (all 10 pass).
+
+Same font/heading/layout as the original page — only the previously-empty
+content area changed.
+
 ## 2026-09-02 (cont'd) — Christian Ministry Assets: page counts checked, and Pack 2 is not what it claims to be
 
 Tooling gap closed (PyMuPDF installs and works fine in this environment,
@@ -421,10 +443,10 @@ it's never mistaken for a file that was actually found in one of the ZIPs.
   the lead magnet itself now exists (see above) but still needs a real
   hosting/delivery link once a storefront/ConvertKit form is set up.
 - **Christian Ministry Assets Pack 2** (`products/christian-ministry-assets/
-  pack-2-more-assets-20/`): needs a real content pass on 13 stub items and
-  actual maze artwork for the maze book — see finding above. The
-  duplicate-text bug in the affirmation deck (item 14) is fixed. Not
-  launch-ready as a whole yet.
+  pack-2-more-assets-20/`): needs a real content pass on the remaining 13
+  stub items — see finding above. The affirmation deck's duplicate-text bug
+  (item 14) and the maze book's missing artwork (item 3) are both fixed.
+  Not launch-ready as a whole yet.
 - **Christian Ministry Assets Pack 1, item 2** (`02_Scripture_Coloring_
   Pages`): needs actual coloring-page illustrations; currently just borders
   and captions.
