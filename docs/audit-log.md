@@ -339,6 +339,21 @@ maze, flagged above. Fixed both problems:
 Same font/heading/layout as the original page — only the previously-empty
 content area changed.
 
+## 2026-09-02 (cont'd) — Illustrated Pack 1's Scripture Coloring Pages
+
+`02_Scripture_Coloring_Pages/Color_and_Reflect_Scripture_Coloring_Pages.pdf`
+(Pack 1, item 2) had the same problem as the maze book: 12 pages that were
+each only a decorative gold frame and a Scripture reference, with nothing
+to actually color, flagged above. Added two rose-curve flower mandalas per
+page (a large one above the verse, a smaller one below), one page-to-page
+distinct petal count each (varying the classic `r = R·cos(kθ)` rose-curve
+parameter, k from 3 to 9, a different pair per page so no two pages match),
+in a soft charcoal line-art color that reads clearly as "meant to be
+colored in" against the existing gold frame. Verified by rendering every
+page: no overlap with the title/reference text, consistent margins inside
+the existing frame, all 12 pages distinct. The gold frame, verse, and
+reference text are untouched.
+
 ## 2026-09-02 (cont'd) — Christian Ministry Assets: page counts checked, and Pack 2 is not what it claims to be
 
 Tooling gap closed (PyMuPDF installs and works fine in this environment,
@@ -447,9 +462,8 @@ it's never mistaken for a file that was actually found in one of the ZIPs.
   stub items — see finding above. The affirmation deck's duplicate-text bug
   (item 14) and the maze book's missing artwork (item 3) are both fixed.
   Not launch-ready as a whole yet.
-- **Christian Ministry Assets Pack 1, item 2** (`02_Scripture_Coloring_
-  Pages`): needs actual coloring-page illustrations; currently just borders
-  and captions.
+- ~~Christian Ministry Assets Pack 1, item 2 (Scripture Coloring Pages):
+  needs actual coloring-page illustrations~~ — fixed, see above.
 - Social Command Center HTML and the branded planner's companion-access page
   both assume live account/API wiring that does not exist yet — still a
   concept shell, not a working integration.
