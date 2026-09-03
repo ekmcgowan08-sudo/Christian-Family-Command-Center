@@ -290,6 +290,64 @@ spacing in every page rendered above — either that was already corrected
 upstream before this copy was produced, or it was specific to a different
 draft not in this batch. Flag it again if it turns up in a future copy.
 
+## 2026-09-02 (cont'd) — Christian Ministry Assets: page counts checked, and Pack 2 is not what it claims to be
+
+Tooling gap closed (PyMuPDF installs and works fine in this environment,
+unlike pypdf/pdfplumber which hit a broken system `cryptography` binding).
+Every PDF in both packs was opened, page-counted, and its extracted text
+length measured; anything short or repetitive was opened and read/rendered
+directly rather than trusted to the character count alone.
+
+**Pack 1 (`pack-1-gumroad-20`) is genuinely complete, with one exception.**
+Spot-checked the devotional journal, prayer journal, budget planner, and
+vision board kit in full: real, substantive, page-by-page unique content
+matching their descriptions (e.g. the devotional has 30 distinct daily
+Scripture + reflection + journal-prompt entries, not a repeated template).
+**Exception: `02_Scripture_Coloring_Pages`** — every page is a decorative
+gold border and a Scripture reference in pale gray text, with **no coloring
+illustration at all** (verified both by `page.get_images()`/`get_drawings()`
+returning nothing but the border, and by rendering the page). It's sold as
+a coloring book with nothing to color. Everything else in Pack 1 checks out.
+
+**Pack 2 (`pack-2-more-assets-20`) is placeholder content, not 20 finished
+products**, despite its own `README_Product_Catalog_2.md` and the
+`Christian_Gumroad_Assets_Manifest.txt` delivery notice both describing it
+as ready Gumroad products. Of the 20 items:
+
+- **13 of 20** are just a 2-page title/blurb stub — a cover page plus one
+  sentence naming the topic, with no actual worksheet, checklist, or
+  template underneath (`Christian_Self_Care_Planner`,
+  `Wedding_Planning_Devotional`, `Volunteer_Coordinator_Toolkit`,
+  `Mother_Daughter_Devotional`, `Father_Son_Faith_Journal`,
+  `Lent_Prayer_Guide`, `Recipe_Blessing_Book`,
+  `Bible_Character_Study_Workbook`, `Homeschool_Morning_Time_Pack`,
+  `Anxiety_Relief_Journal`, `Christian_Social_Caption_Pack`,
+  `Prayer_Board_Printables`, `Bible_Study_Color_Coding_Guide`). Rendered
+  `07_Christian_Self_Care_Planner.pdf` page 2 directly to confirm: a
+  "Checklist" heading and one sentence listing seven words, no boxes, no
+  fillable structure.
+- **Several multi-page items repeat a bare label with no content per
+  instance**, rather than 14/20/24 unique entries: `04_Marriage_Prayer_
+  Journal` (16 pages, just "Session 1" … "Session 14" headers), `11_Advent_
+  Scripture_Countdown` (25 pages, just "Day N / Scripture: ____" blanks),
+  `02_Small_Group_Guide_Pack` (7 pages, just "Week 1" … "Week 5" headers).
+- **`14_Identity_Affirmation_Deck` has an outright content bug**, not just
+  thinness: all 20 "cards" contain the exact same line — *"I am chosen,
+  secure, and called with purpose."* — verified by diffing extracted text
+  across all 20 card pages (1 unique string, not 20).
+- **`03_Bible_Verse_Maze_Book` has the same missing-illustration problem as
+  Pack 1's coloring pages**: every "puzzle" page is an empty bordered
+  rectangle with no maze inside it (confirmed by rendering — zero vector
+  paths or images on the page beyond the border itself).
+- The only Pack 2 items that hold up as genuinely usable, if brief: `01_
+  Church_Welcome_Packet` (a real welcome letter + visitor card, 2 unique
+  content pages) and `08_Bible_Verse_Handwriting_Practice` (3 distinct real
+  verses for tracing).
+
+**Bottom line:** don't list Pack 2 for sale as-is. It needs the same kind of
+content pass Pack 1 already got — the packaging (covers, filenames, README)
+is there, the actual product content mostly isn't yet.
+
 ## Open items / still outstanding
 
 - Parts 8, 9, 10 of the numbered ZIP set have never been supplied.
@@ -297,8 +355,13 @@ draft not in this batch. Flag it again if it turns up in a future copy.
 - Welcome email sequence: freebie/product links are still placeholders; the
   "Weekly Family Reset Checklist" lead magnet referenced by email 1 has never
   turned up in any recovered package.
-- Christian Ministry Assets (40 products): PDF page counts/content not yet
-  spot-checked (tooling gap in this session, not a content problem).
+- **Christian Ministry Assets Pack 2** (`products/christian-ministry-assets/
+  pack-2-more-assets-20/`): needs a real content pass on 13 stub items, a
+  fix for the duplicated-text bug in the affirmation deck, and actual maze
+  artwork for the maze book — see finding above. Not launch-ready.
+- **Christian Ministry Assets Pack 1, item 2** (`02_Scripture_Coloring_
+  Pages`): needs actual coloring-page illustrations; currently just borders
+  and captions.
 - Social Command Center HTML and the branded planner's companion-access page
   both assume live account/API wiring that does not exist yet — still a
   concept shell, not a working integration.
