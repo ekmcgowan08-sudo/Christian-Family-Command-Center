@@ -290,6 +290,33 @@ spacing in every page rendered above — either that was already corrected
 upstream before this copy was produced, or it was specific to a different
 draft not in this batch. Flag it again if it turns up in a future copy.
 
+**Follow-up correction to the fix itself:** the first pass covered the old
+text with an opaque rectangle rather than removing it, which left the
+original raw markup and (for the banner fix) a second copy of each label
+sitting underneath, invisible on screen but still present in the file's
+text layer — extractable by copy-paste or a screen reader, and a red flag
+in any future audit that re-scans "does this file still contain markup."
+Rebuilt both files using true redaction (`add_redact_annot` +
+`apply_redactions`, which deletes the underlying content instead of
+painting over it) before re-inserting the replacement text. Re-verified:
+`<link` no longer appears anywhere in either file's extracted text, and
+each of the six repaired headers (`Prayer Requests`, `Gratitude`, `Meal
+Snapshot`, `Top 3 Priorities`, `Gratitude Log`, `Meal Plan Snapshot`) now
+appears exactly once per page, not twice. Visual output is pixel-identical
+to the already-verified renders above.
+
+## 2026-09-02 (cont'd) — Fixed the Identity Affirmation Deck's duplicate-text bug
+
+The 20 "cards" in `14_Identity_Affirmation_Deck.pdf` (Pack 2, item 14) all
+repeated the same single line — flagged above as a content bug, not just
+thinness. Wrote 20 distinct identity-in-Christ affirmations (same length
+and tone as the original: "I am ___, because ___" statements grounded in
+common discipleship themes — chosen, forgiven, secure, gifted, at peace,
+kept, growing, called, etc.) and replaced each card's body text using the
+same redaction approach as above, so no duplicate/stale text remains
+underneath. Verified: 20 unique bodies across 20 cards (was 1), title page
+and instructions untouched, same fonts/colors/layout as the original.
+
 ## 2026-09-02 (cont'd) — Christian Ministry Assets: page counts checked, and Pack 2 is not what it claims to be
 
 Tooling gap closed (PyMuPDF installs and works fine in this environment,
@@ -394,9 +421,10 @@ it's never mistaken for a file that was actually found in one of the ZIPs.
   the lead magnet itself now exists (see above) but still needs a real
   hosting/delivery link once a storefront/ConvertKit form is set up.
 - **Christian Ministry Assets Pack 2** (`products/christian-ministry-assets/
-  pack-2-more-assets-20/`): needs a real content pass on 13 stub items, a
-  fix for the duplicated-text bug in the affirmation deck, and actual maze
-  artwork for the maze book — see finding above. Not launch-ready.
+  pack-2-more-assets-20/`): needs a real content pass on 13 stub items and
+  actual maze artwork for the maze book — see finding above. The
+  duplicate-text bug in the affirmation deck (item 14) is fixed. Not
+  launch-ready as a whole yet.
 - **Christian Ministry Assets Pack 1, item 2** (`02_Scripture_Coloring_
   Pages`): needs actual coloring-page illustrations; currently just borders
   and captions.
