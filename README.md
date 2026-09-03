@@ -5,6 +5,8 @@ Intended as a central workspace for Christian products, social content, KPIs, as
 
 - `products/` — recovered, sellable product files (workbook, prayer planner, HQ
   dashboard, Spare Chair video kit, Christian Ministry Assets Gumroad catalog).
+  `weekly-family-reset-checklist/` is the one exception: newly created, not
+  recovered — see the audit log entry for why.
 - `assets/pinterest-pins/` — the 5 canonical Pinterest pin designs.
 - `marketing/storefront/` — the storefront cover image.
 - `social-command-center/` — the standalone front-end concept demo.

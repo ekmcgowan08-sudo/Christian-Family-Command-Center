@@ -348,13 +348,51 @@ as ready Gumroad products. Of the 20 items:
 content pass Pack 1 already got — the packaging (covers, filenames, README)
 is there, the actual product content mostly isn't yet.
 
+## 2026-09-02 (cont'd) — Recreated the missing "Weekly Family Reset Checklist" lead magnet
+
+This is the one gap in the funnel that couldn't be closed by recovery —
+no recovered package, in this session or the prior one, contains a file by
+this name. Rather than leave email 1 of the welcome sequence promising a
+download that doesn't exist, built a one-page replacement from the brief
+already implicit in the recovered copy:
+
+- The lead magnet's own description (email 1): *"a simple tool to help you
+  reset your home, your schedule, and your heart at the start of each
+  week."*
+- The specific 3-step ritual email 2 walks through (glance at the week
+  ahead, pick a Scripture/prayer focus, write top 3 priorities) as the
+  free, lighter version of what the $9 Prayer & Weekly Planner does in full
+  (email 3's soft pitch) — so the free checklist naturally leads into the
+  paid product instead of duplicating it.
+
+Result: `products/weekly-family-reset-checklist/Weekly_Family_Reset_
+Checklist.pdf` — one page, three sections (Home Reset / Schedule Reset /
+Faith Reset, 4 checkbox items each) plus a short "want to go deeper" note
+pointing at the Prayer & Weekly Planner, built to match the existing brand
+palette exactly (`#224B3F` dark green, `#B58A3A` gold, `#FBF7EF` cream —
+the same colors already used in the link hub and both planner PDFs).
+
+Two things worth knowing about how this was built, in case it needs edits
+later: it was hand-drawn with PyMuPDF rather than a template, so (a) an
+em dash (`—`) rendered as a stray middle dot with the base Helvetica font
+in this environment — caught before shipping by re-rendering and reading
+the output, and replaced with a plain hyphen throughout — and (b) it was
+run through the same "white text painted over" scan used to catch the bug
+in the two existing planner PDFs, clean. No fabricated purchase links were
+added — the "go deeper" note names the Prayer & Weekly Planner without
+linking to a storefront URL that isn't known to exist yet.
+
+This is new content, not recovered content — flagged here explicitly so
+it's never mistaken for a file that was actually found in one of the ZIPs.
+
 ## Open items / still outstanding
 
 - Parts 8, 9, 10 of the numbered ZIP set have never been supplied.
 - Pinterest launch inventory: 5 of 10 target designs.
-- Welcome email sequence: freebie/product links are still placeholders; the
-  "Weekly Family Reset Checklist" lead magnet referenced by email 1 has never
-  turned up in any recovered package.
+- Welcome email sequence: freebie/product links (`[Download it here →]`,
+  `[Get the Prayer & Weekly Planner →]`, etc.) are still placeholders —
+  the lead magnet itself now exists (see above) but still needs a real
+  hosting/delivery link once a storefront/ConvertKit form is set up.
 - **Christian Ministry Assets Pack 2** (`products/christian-ministry-assets/
   pack-2-more-assets-20/`): needs a real content pass on 13 stub items, a
   fix for the duplicated-text bug in the affirmation deck, and actual maze
