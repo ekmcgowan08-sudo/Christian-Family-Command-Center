@@ -383,11 +383,42 @@ helper to always advance a full row even for blank text, and added an
 actual writable line next to blank checkbox items (there wasn't one before
 the fix either) — then rebuilt and re-verified all 13 files.
 
-Items 02, 04, and 11 (Small Group Guide, Marriage Prayer Journal, Advent
-Countdown) still repeat a bare "Session N" / "Day N" label with nothing
-else per page — noted in the original finding as a lesser defect than the
-13 above (they at least have real week-by-week/day-by-day structure). Not
-addressed in this pass; still open below.
+## 2026-09-02 (cont'd) — Fixed the last Pack 2 gap: items 02, 04, 11
+
+The one remaining defect from the original Pack 2 finding: items 02, 04,
+and 11 had real week-by-week/day-by-day structure but each page repeated
+a bare "Session N" / "Day N" label with nothing else. Filled all three in,
+keeping exact page counts (so nothing about the product's page range or
+"14 sessions" / "24 days" framing changed, only what's on each page):
+
+- **02 Small Group Guide Pack** (7p, unchanged): the intro promised
+  "opening prayer, icebreaker, Scripture reading, discussion, and closing
+  prayer" per guide — each of the 5 weeks now has all five, built around a
+  belonging → honesty → serving → forgiveness → sent-out arc.
+- **04 Marriage Prayer Journal** (16p, unchanged): 14 sessions, each with
+  a distinct verse cycling through the intro's four themes (unity,
+  communication, forgiveness, shared purpose), a discussion question, and
+  separate his-answer / her-answer / our-prayer writing space.
+- **11 Advent Scripture Countdown** (25p, unchanged): all 24 "Day N: 
+  Scripture ____" blanks filled with 24 distinct, real references telling
+  the Christmas story in order (Genesis 3:15's first promise through
+  John 1:14's "the Word became flesh"), plus a daily reflection line.
+
+Verified: all pages in all three files are textually unique (was: every
+page in a file identical apart from the number), no page count changed
+from the original, no content runs past the page bottom.
+
+**Caught during the build:** one call reused the `label_line` helper (a
+short-label-plus-blank-line pattern meant for things like "Date: ___") for
+a full discussion question in the marriage journal. Since `label_line`
+always draws the blank starting right after the text, a long question
+pushed against the margin left a stray, nearly invisible line fragment at
+the end of the sentence — again something the earlier "does content run
+off the page" scan wouldn't catch, only visible on a rendered page.
+Swapped that call for a wrapped paragraph instead and rebuilt.
+
+With this, every defect logged for Christian Ministry Assets Pack 1 and
+Pack 2 in this session is resolved.
 
 ## 2026-09-02 (cont'd) — Illustrated Pack 1's Scripture Coloring Pages
 
@@ -507,12 +538,9 @@ it's never mistaken for a file that was actually found in one of the ZIPs.
   `[Get the Prayer & Weekly Planner →]`, etc.) are still placeholders —
   the lead magnet itself now exists (see above) but still needs a real
   hosting/delivery link once a storefront/ConvertKit form is set up.
-- **Christian Ministry Assets Pack 2**: items 02 (Small Group Guide Pack),
-  04 (Marriage Prayer Journal), and 11 (Advent Scripture Countdown) still
-  repeat a bare session/day label with no content per page — the one
-  remaining defect from the original Pack 2 finding. Everything else in
-  Pack 2 (the 13 stubs, the affirmation deck bug, the maze book) is fixed
-  — see entries above.
+- ~~Christian Ministry Assets Pack 2, items 02/04/11: bare session/day
+  labels with no content~~ — fixed, see above. All logged Pack 1 and
+  Pack 2 defects are now resolved.
 - ~~Christian Ministry Assets Pack 1, item 2 (Scripture Coloring Pages):
   needs actual coloring-page illustrations~~ — fixed, see above.
 - Social Command Center HTML and the branded planner's companion-access page
