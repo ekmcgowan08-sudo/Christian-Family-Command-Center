@@ -237,14 +237,63 @@ metadata:
 
 ---
 
+## 2026-09-02 (cont'd) — Both Prayer Planner PDFs repaired in place
+
+Both defects flagged as outstanding above were root-caused and fixed
+directly in the PDFs now held in `products/prayer-weekly-planner/`, using
+PyMuPDF to patch the page content streams. Verified by re-rendering every
+affected page to PNG before and after and comparing visually (not just by
+re-running the same text/color scan that found the bug).
+
+**Raw `<link href=...>` markup (branded PDF, pages 1 and 7)** — the PDF
+generator had printed the literal HTML anchor tag as visible text instead of
+rendering it. Fixed by covering the old text with the same white card
+background and inserting a clean instruction in its place:
+- Page 1: `Open the Link Hub: prayer-planner-link-hub.html`
+- Page 7: `Open the Companion Link Hub: prayer-planner-link-hub.html`
+
+Both replacements are also now real clickable link annotations pointing at
+the relative file `prayer-planner-link-hub.html`, so "clickable instruction"
+is literal, not just visual, in viewers that support relative-file link
+annotations.
+
+**"Near-white section headings" — root cause found: not a font-color
+choice, a draw-order bug.** Every affected heading is white bold text on a
+colored banner rectangle exactly as designed — but a later drawing command
+in the same page (a plain background-color rectangle for the content panel
+below it) was painted on top of three of those banners, erasing the colored
+banner background and leaving genuinely white text on a white/cream panel —
+invisible, not just low-contrast. This is present in **both** files, not
+just the branded one:
+
+- `Prayer_Weekly_Planner_Branded.pdf`, pages 2 and 3 (full weekly + ink-saver
+  layouts): "Prayer Requests", "Gratitude", "Meal Snapshot" headers.
+- `Prayer_Weekly_Planner.pdf` (unbranded), pages 2 and 3: "Top 3 Priorities",
+  "Gratitude Log", "Meal Plan Snapshot" headers. ("Prayer Requests This
+  Week" and the two left-column headers on these pages were never affected —
+  they sit above where the erasing rectangle starts.)
+
+Fixed by redrawing each banner rectangle in its original color *after* the
+erasing rectangle (so it now paints on top, as originally intended) and
+reinserting the white header label at its original position, font, and
+size. Nothing else on any page was touched — same layout, same content,
+same everywhere-else colors.
+
+A file-level scan for "white text sitting on a light-colored rectangle
+that was drawn after it" across every page of both PDFs found no further
+instances after these fixes.
+
+**Not reproduced this session:** the "very wide letter-spacing on headings"
+defect noted in the 2026-08-29 baseline. The copies in hand from Part 3 use
+no character-spacing (`Tc`) operator anywhere and render with normal
+spacing in every page rendered above — either that was already corrected
+upstream before this copy was produced, or it was specific to a different
+draft not in this batch. Flag it again if it turns up in a future copy.
+
 ## Open items / still outstanding
 
 - Parts 8, 9, 10 of the numbered ZIP set have never been supplied.
 - Pinterest launch inventory: 5 of 10 target designs.
-- Branded Prayer Planner PDF: raw `<link>` markup on pages 1 and 7 still
-  needs to be fixed in every copy currently held.
-- Prayer Planner (unbranded + branded): near-white section headings on cream
-  background still need darkening for accessibility.
 - Welcome email sequence: freebie/product links are still placeholders; the
   "Weekly Family Reset Checklist" lead magnet referenced by email 1 has never
   turned up in any recovered package.
