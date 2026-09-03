@@ -339,6 +339,56 @@ maze, flagged above. Fixed both problems:
 Same font/heading/layout as the original page — only the previously-empty
 content area changed.
 
+## 2026-09-02 (cont'd) — Wrote real content for Pack 2's 13 stub products
+
+The remaining defect from the Pack 2 audit: 13 of 20 items were a 2-page
+title/blurb stub with nothing underneath (listed by name in the finding
+above). Wrote genuine, complete content for all 13, keeping each product's
+original title, tagline, and one-line brief exactly as recovered — the
+brief already named the sections each product needed, so nothing here
+invents a new product, it fills in the one that was already outlined:
+
+| # | Product | Was | Now |
+|---|---|---|---|
+| 05 | Mother-Daughter Devotional | 2p stub | 7p — 5 devotions (verse, reflection, talk-it-through questions for mom + daughter separately, prayer) |
+| 06 | Father-Son Faith Journal | 2p stub | 6p — 4 themed journaling sessions (identity, courage, obedience, integrity) with verse + guided writing space |
+| 07 | Christian Self-Care Planner | 2p stub | 4p — intro, a real weekly tracker table (7 categories x 7 days of checkboxes), reflection prompts |
+| 09 | Wedding Planning Devotional | 2p stub | 7p — 5 premarital devotions (prayer, unity, service, money, covenant) |
+| 10 | Volunteer Coordinator Toolkit | 2p stub | 6p — team roster, attendance tracker, rotation planner, and communication log, each a real fillable table |
+| 12 | Lent Prayer and Reflection Guide | 2p stub | 8p — one theme per week for 5 weeks plus Holy Week, each with a passage, reflection, and prayer space |
+| 13 | Recipe Blessing Book | 2p stub | 5p — 5 table blessings for different occasions, plus 2 fillable recipe template pages with a gratitude line |
+| 15 | Bible Character Study Workbook | 2p stub | 8p — a study page each for Esther, Ruth, David, Paul, Mary, Joseph (context + two guided questions with writing space) |
+| 16 | Homeschool Morning Time Pack | 2p stub | 4p — the 6-part daily routine as a real checklist, plus a fillable weekly plan table |
+| 17 | Anxiety Relief Journal | 2p stub | 5p — 5 anxiety-specific promise verses, plus 2 repeatable thought-record worksheets (thought → promise → prayer → next step) |
+| 18 | Christian Social Caption Pack | 2p stub | 6p — a formula plus 2 real example captions for each of 4 post types (devotional, encouragement, reels, quote graphics) |
+| 19 | Prayer Board Printables | 2p stub | 8p — one card per category (family, healing, church, nations, goals, answered prayer) with checkbox+writable-line requests and an answered-prayer log |
+| 20 | Bible Study Highlighter Key Guide | 2p stub | 3p — an actual color legend with colored swatches (not just text naming colors) and a real example verse per category |
+
+Built with the same visual language the originals already used (cream
+title page, white content pages, the same dark-brown/gold color pair,
+Helvetica) via a small reusable page-template module, so the new pages
+don't look bolted on. Every generated file was rendered and checked
+page-by-page for content running past the page bottom before being
+installed — none did.
+
+**Caught and fixed during the build, not after:** the first version of the
+checklist helper collapsed the row spacing to nothing for a blank (fill-in)
+line, because wrapping an empty string produces zero lines of text and the
+row-height math depended on line count. It only showed up on the one
+product (Prayer Board Printables) that uses blank checklist rows — everything
+else happened to always pass non-empty text into that helper, so the bug
+was invisible until that specific page was rendered and inspected, not
+caught by the earlier "does anything run off the page" scan. Fixed the
+helper to always advance a full row even for blank text, and added an
+actual writable line next to blank checkbox items (there wasn't one before
+the fix either) — then rebuilt and re-verified all 13 files.
+
+Items 02, 04, and 11 (Small Group Guide, Marriage Prayer Journal, Advent
+Countdown) still repeat a bare "Session N" / "Day N" label with nothing
+else per page — noted in the original finding as a lesser defect than the
+13 above (they at least have real week-by-week/day-by-day structure). Not
+addressed in this pass; still open below.
+
 ## 2026-09-02 (cont'd) — Illustrated Pack 1's Scripture Coloring Pages
 
 `02_Scripture_Coloring_Pages/Color_and_Reflect_Scripture_Coloring_Pages.pdf`
@@ -457,11 +507,12 @@ it's never mistaken for a file that was actually found in one of the ZIPs.
   `[Get the Prayer & Weekly Planner →]`, etc.) are still placeholders —
   the lead magnet itself now exists (see above) but still needs a real
   hosting/delivery link once a storefront/ConvertKit form is set up.
-- **Christian Ministry Assets Pack 2** (`products/christian-ministry-assets/
-  pack-2-more-assets-20/`): needs a real content pass on the remaining 13
-  stub items — see finding above. The affirmation deck's duplicate-text bug
-  (item 14) and the maze book's missing artwork (item 3) are both fixed.
-  Not launch-ready as a whole yet.
+- **Christian Ministry Assets Pack 2**: items 02 (Small Group Guide Pack),
+  04 (Marriage Prayer Journal), and 11 (Advent Scripture Countdown) still
+  repeat a bare session/day label with no content per page — the one
+  remaining defect from the original Pack 2 finding. Everything else in
+  Pack 2 (the 13 stubs, the affirmation deck bug, the maze book) is fixed
+  — see entries above.
 - ~~Christian Ministry Assets Pack 1, item 2 (Scripture Coloring Pages):
   needs actual coloring-page illustrations~~ — fixed, see above.
 - Social Command Center HTML and the branded planner's companion-access page
