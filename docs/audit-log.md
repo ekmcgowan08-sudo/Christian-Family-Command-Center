@@ -543,6 +543,108 @@ it's never mistaken for a file that was actually found in one of the ZIPs.
   Pack 2 defects are now resolved.
 - ~~Christian Ministry Assets Pack 1, item 2 (Scripture Coloring Pages):
   needs actual coloring-page illustrations~~ — fixed, see above.
-- Social Command Center HTML and the branded planner's companion-access page
-  both assume live account/API wiring that does not exist yet — still a
-  concept shell, not a working integration.
+- The branded planner's companion-access page still assumes live
+  account/API wiring that doesn't exist for the *planner PDF itself* —
+  it's just a link to the static link hub. The Social Command Center
+  concept shell now has a real counterpart, though: see the 2026-09-04
+  entry below.
+
+## 2026-09-04 — Built the actual Christian Family Command Center web app
+
+Everything above this point was recovery, auditing, and content fixes on
+static files. This entry is different: a real, working application, built
+fresh (not recovered from any ZIP) in `webapp/`, at the user's request for
+"a full app with... a normal password-protected admin dashboard each
+family logs into," connected to Google Calendar/Gmail and to iOS/Android
+calendar apps, with family members able to connect their own accounts to
+each other if they choose.
+
+**Stack** (chosen with the user via `AskUserQuestion` before writing any
+code, since tech stack and hosting are expensive decisions to reverse
+later): Next.js 16 + React 19 + TypeScript, PostgreSQL via Prisma 6,
+Auth.js (NextAuth v5) credentials login, `googleapis` for a separate
+per-user Google OAuth connection, and the `ics` package for phone calendar
+sync via a private webcal feed rather than a native iOS/Android app.
+
+**Data model**: Family is the tenant. Each family member gets their own
+User (own email/password, `OWNER` or `MEMBER` role) — not one shared
+family login. A member's GoogleAccount (OAuth tokens) is entirely separate
+from login and defaults to private; a `shareCalendar` toggle each member
+controls themselves is what "connect their accounts to each other if they
+so choose" turns into concretely — sharing is opt-in per person, not
+automatic for the family. CalendarEvent rows are the shared family
+calendar, either typed in directly or mirrored from any member's shared
+Google Calendar.
+
+**What's actually built and verified working** (via Playwright driving a
+real Chromium browser against the running app, plus direct Postgres
+checks — not just "the code compiles"):
+- Family signup (creates a Family + first OWNER) and invite-based signup
+  (joins an existing Family with a member's own login) — both auto-sign-in
+  on success.
+- Login/logout, and the route guard (`src/proxy.ts`) actually blocking
+  `/dashboard/*` for signed-out visitors and after logout, confirmed by
+  checking the session cookie was really cleared, not just that the UI
+  looked right.
+- The shared family calendar: adding manual events (timed and all-day),
+  every family member seeing the same events with per-event attribution,
+  and deleting manual events.
+- The `.ics`/webcal feed endpoint producing real, valid calendar data for
+  a family's events.
+- Family management: owner-only invite generation and revocation,
+  owner-only member removal, and confirming a plain MEMBER can't see or
+  use any of those owner-only controls.
+- Settings: password change (confirmed the old password stops working and
+  the new one logs in), and the ICS feed link display with a
+  regenerate-token control.
+- The Google "Connect account" UI correctly disables itself with an
+  explanation when `GOOGLE_CLIENT_ID`/`SECRET` aren't configured, since
+  those must come from a Google Cloud project the user creates themselves
+  — documented step-by-step in `webapp/docs/GOOGLE_SETUP.md`. The OAuth
+  connect/callback routes, token-refresh handling, Calendar sync, and
+  Gmail-preview code are written and typecheck, but couldn't be exercised
+  end-to-end in this session without real Google credentials.
+
+**Bugs caught during this same verification pass, fixed before shipping**
+(not found by a separate review step — found because each flow was
+actually driven end-to-end and checked against the database, not assumed
+correct from reading the code):
+- The unchecked "all-day event" checkbox is omitted from form submission
+  entirely (browsers don't send unchecked checkboxes), so
+  `formData.get("allDay")` is `null`, not `undefined` — which the Zod
+  schema's `.optional()` rejected. Event creation failed with a raw
+  validation error until this was changed to `.nullish()`.
+- The `.ics` feed route never stripped the `.ics` suffix from the URL
+  before looking up the family by token, so the exact webcal URL shown on
+  the Settings page 404'd. Fixed by trimming a trailing `.ics` before the
+  database lookup.
+
+**Also caught, and correctly identified as test-harness noise rather than
+app bugs** — worth recording so a future pass doesn't re-chase these:
+Next.js's dev-mode indicator badge visually overlaps the sidebar's logout
+button at the same screen position, which made an automated click miss
+the real button (submitting the form via JS directly confirmed logout
+itself works fine); and a same-page text check right after a server
+action's `revalidatePath` occasionally read stale content before the
+re-render finished, which a direct database check resolved.
+
+**Environment-specific things worth knowing, documented in
+`webapp/README.md`**: this Next.js version (16.3) and Prisma's `7.x`/`8.x`
+lines were prereleases with real breaking changes at the time this was
+built (Prisma moved `datasource.url` out of `schema.prisma` entirely, and
+Next renamed the `middleware.ts` convention to `proxy.ts`) — Prisma is
+pinned to the last stable `6.19.3` line deliberately, and `npm install`
+needs `--legacy-peer-deps` to route around an unrelated npm/arborist crash
+on this dependency graph. None of this is a defect in the app itself, but
+it will confuse anyone who tries to "fix" it back to older conventions
+without reading that note first.
+
+**Not done in this session, and why:**
+- Real end-to-end Google OAuth/Calendar/Gmail testing — needs a Google
+  Cloud project and test-user credentials only the user can create (guide
+  provided).
+- Deployment to any specific host — the user hadn't decided on one yet;
+  the app is built deployable (Docker, or any Node host) rather than
+  wired to a particular platform.
+- A native iOS/Android app — deliberately out of scope per the user's own
+  choice of the webcal/ICS approach over native apps.

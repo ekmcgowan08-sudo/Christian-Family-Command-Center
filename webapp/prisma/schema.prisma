@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+// A Family is the tenant. Every user, event, and integration belongs to one.
+model Family {
+  id            String   @id @default(cuid())
+  name          String
+  createdAt     DateTime @default(now())
+
+  // Secret path segment for this family's combined calendar feed
+  // (webcal://.../api/feed/<icsToken>.ics). Rotate by regenerating.
+  icsToken      String   @unique @default(cuid())
+
+  members       User[]
+  events        CalendarEvent[]
+  invites       Invite[]
+}
+
+// One login per family member -- not one shared family account.
+model User {
+  id            String   @id @default(cuid())
+  familyId      String
+  family        Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(MEMBER)
+
+  createdAt     DateTime @default(now())
+
+  googleAccount GoogleAccount?
+  createdEvents CalendarEvent[] @relation("EventCreator")
+  sentInvites   Invite[]        @relation("InviteSender")
+}
+
+// A member's own connected Google account. Separate from login --
+// this is only used for pulling in Calendar/Gmail data, opt-in per user.
+model GoogleAccount {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  googleEmail       String
+  accessToken       String   @db.Text
+  refreshToken      String   @db.Text
+  expiresAt         DateTime
+  grantedScopes     String
+
+  // Whether this member has chosen to share their connected Google
+  // Calendar into the family's combined calendar / ICS feed.
+  shareCalendar     Boolean  @default(false)
+  // Which Google calendar id to pull from (default "primary").
+  calendarId        String   @default("primary")
+
+  lastSyncedAt      DateTime?
+  connectedAt       DateTime @default(now())
+}
+
+enum EventSource {
+  MANUAL
+  GOOGLE
+}
+
+// The family's unified calendar: events typed in directly, plus events
+// pulled in from any member's shared Google Calendar.
+model CalendarEvent {
+  id              String      @id @default(cuid())
+  familyId        String
+  family          Family      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String?
+  location        String?
+  startAt         DateTime
+  endAt           DateTime
+  allDay          Boolean     @default(false)
+
+  source          EventSource @default(MANUAL)
+  // For GOOGLE-sourced events: the owning member + the Google event id,
+  // used to de-dupe on re-sync and to know whose calendar it came from.
+  sourceUserId    String?
+  sourceEventId   String?
+
+  createdByUserId String?
+  createdBy       User?       @relation("EventCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([familyId, source, sourceUserId, sourceEventId])
+  @@index([familyId, startAt])
+}
+
+// An invite code an owner/member generates to bring another family
+// member onto the account with their own login.
+model Invite {
+  id          String   @id @default(cuid())
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  code        String   @unique @default(cuid())
+  email       String?
+  role        Role     @default(MEMBER)
+
+  invitedByUserId String
+  invitedBy   User     @relation("InviteSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  usedAt      DateTime?
+}
