@@ -6,6 +6,10 @@ Google account (Calendar + Gmail) and choose whether to share it with the
 rest of the family. The family's combined calendar is also exposed as a
 private feed that iOS and Android phones can subscribe to directly.
 
+Members can edit or remove the events they and others have added, reset a
+forgotten password by email, and receive invite links by email instead of
+having to be handed a copy-pasted URL.
+
 ## Stack
 
 - **Next.js 16** (App Router, Server Actions) + React 19 + TypeScript
@@ -14,6 +18,8 @@ private feed that iOS and Android phones can subscribe to directly.
 - **googleapis** — a separate, per-user OAuth connection for Calendar/Gmail
   (independent of login)
 - **ics** — generates the family's `.ics` / webcal calendar feed
+- **nodemailer** — generic SMTP for invite and password-reset emails (any
+  provider; see [`docs/EMAIL_SETUP.md`](docs/EMAIL_SETUP.md))
 - Tailwind CSS v4
 
 ## How the pieces fit together
@@ -35,6 +41,14 @@ private feed that iOS and Android phones can subscribe to directly.
   unauthenticated — that's how phone calendar apps subscribe to it. Its
   security comes from `Family.icsToken` being a long random secret, which
   can be regenerated from Settings if it ever leaks.
+- **PasswordResetToken** is a single-use, 1-hour-lived token emailed on
+  request from `/forgot-password`. Requesting a reset always returns the
+  same generic message regardless of whether the email matches an
+  account, so the endpoint can't be used to check who has an account.
+  Email sending is optional — see [`docs/EMAIL_SETUP.md`](docs/EMAIL_SETUP.md);
+  without it configured, both invite links and password reset degrade
+  gracefully (a copy-paste link, and a clear "not set up yet" message,
+  respectively) rather than failing silently.
 
 ## Local setup
 

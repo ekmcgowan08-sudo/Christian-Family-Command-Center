@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isEmailConfigured, sendInviteEmail } from "@/lib/email";
 import type { ActionResult } from "@/lib/actions/auth";
 
 const inviteSchema = z.object({
@@ -11,7 +12,7 @@ const inviteSchema = z.object({
   role: z.enum(["OWNER", "MEMBER"]),
 });
 
-export type InviteResult = ActionResult | { success: true; code: string };
+export type InviteResult = ActionResult | { success: true; code: string; emailed: boolean };
 
 export async function createInvite(
   _prevState: InviteResult | null,
@@ -42,10 +43,29 @@ export async function createInvite(
       role: parsed.data.role,
       expiresAt,
     },
+    include: { family: true },
   });
 
+  let emailed = false;
+  if (invite.email && isEmailConfigured()) {
+    const inviteUrl = `${process.env.NEXTAUTH_URL}/signup?code=${invite.code}`;
+    try {
+      await sendInviteEmail({
+        to: invite.email,
+        inviterName: session.user.name ?? "A family member",
+        familyName: invite.family.name,
+        inviteUrl,
+      });
+      emailed = true;
+    } catch (err) {
+      // Fall back to the copy-paste link shown in the UI -- don't fail
+      // invite creation just because the email send failed.
+      console.error("Failed to send invite email", err);
+    }
+  }
+
   revalidatePath("/dashboard/family");
-  return { success: true, code: invite.code };
+  return { success: true, code: invite.code, emailed };
 }
 
 export async function revokeInvite(inviteId: string) {

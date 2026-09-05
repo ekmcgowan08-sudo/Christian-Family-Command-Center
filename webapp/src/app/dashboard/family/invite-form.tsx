@@ -48,9 +48,15 @@ export function InviteForm() {
         </p>
       )}
 
-      {inviteUrl && (
+      {inviteUrl && state && "emailed" in state && (
         <div className="mt-3 rounded-lg bg-brand-cream px-3 py-2 text-sm">
-          <p className="text-foreground/70">Share this link (expires in 14 days):</p>
+          {state.emailed ? (
+            <p className="text-green-800">
+              Invite emailed! You can also share this link directly:
+            </p>
+          ) : (
+            <p className="text-foreground/70">Share this link (expires in 14 days):</p>
+          )}
           <p className="mt-1 break-all font-mono text-xs text-brand-green">{inviteUrl}</p>
         </div>
       )}

@@ -60,6 +60,55 @@ export async function createEvent(
   return { success: true };
 }
 
+const updateEventSchema = eventSchema.and(
+  z.object({ eventId: z.string().min(1) })
+);
+
+export async function updateEvent(
+  _prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session) return { error: "Not signed in." };
+
+  const parsed = updateEventSchema.safeParse({
+    eventId: formData.get("eventId"),
+    title: formData.get("title"),
+    description: formData.get("description"),
+    location: formData.get("location"),
+    startAt: formData.get("startAt"),
+    endAt: formData.get("endAt"),
+    allDay: formData.get("allDay"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid event." };
+  }
+
+  const { eventId, title, description, location, startAt, endAt, allDay } = parsed.data;
+
+  // Only manually-added events can be edited here -- a Google-synced event
+  // is edited at the source (Google Calendar) and picked up on next sync.
+  const result = await prisma.calendarEvent.updateMany({
+    where: { id: eventId, familyId: session.user.familyId, source: "MANUAL" },
+    data: {
+      title,
+      description: description || null,
+      location: location || null,
+      startAt: new Date(startAt),
+      endAt: new Date(endAt),
+      allDay: allDay === "on",
+    },
+  });
+
+  if (result.count === 0) {
+    return { error: "That event couldn't be found or can't be edited." };
+  }
+
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
 export async function deleteEvent(eventId: string) {
   const session = await auth();
   if (!session) throw new Error("Not signed in.");

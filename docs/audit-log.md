@@ -648,3 +648,65 @@ without reading that note first.
   wired to a particular platform.
 - A native iOS/Android app — deliberately out of scope per the user's own
   choice of the webcal/ICS approach over native apps.
+
+## 2026-09-05 — Closed three of the gaps flagged after the first build
+
+After walking the user through what was and wasn't built yet, they asked
+to keep going on the buildable gaps (the two that needed their own
+action — Google credentials and picking a host — are still open, since
+those genuinely aren't mine to do).
+
+**Event editing.** Calendar events could only be added or deleted, not
+edited. Added an `updateEvent` action and an inline edit form
+(`event-item.tsx`) — click Edit on any manually-added event to change it
+in place. Google-synced events still aren't editable here by design
+(they're edited at the source and picked up on next sync).
+
+**Real outbound email**, via a new `lib/email.ts` using generic SMTP
+(nodemailer) rather than one vendor's API — matches this project's
+existing "bring your own credentials" pattern for Google OAuth, and works
+with Gmail, Resend, Postmark, SES, or a self-hosted mail server. Documented
+in `docs/EMAIL_SETUP.md`. Both features built on top of it degrade
+gracefully when email isn't configured, the same way Google features do
+when Google isn't configured:
+- **Invite emails**: entering an email when creating a family invite now
+  sends a real email with the invite link, if email is configured;
+  otherwise it's the same copy-paste link as before.
+- **Password reset**: a "Forgot password?" link on the login page, a
+  `PasswordResetToken` model (single-use, 1-hour expiry), and a
+  `/reset-password` page. Requesting a reset always shows the same
+  generic message whether or not the email has an account, so the
+  endpoint can't be used to enumerate who's registered.
+
+**Verified this time with a real local SMTP server** (MailDev), not just
+"the code compiles" — actually sent an invite email, pulled the real
+invite link back out of the delivered email via MailDev's API, and
+completed signup with it; and separately requested a real password reset,
+pulled the real token out of the delivered email, reset the password,
+confirmed the old password stopped working and the new one logged in, and
+confirmed the same reset token can't be reused a second time.
+
+**A real bug caught by ESLint, not by hand**: the edit-form's "close on
+successful save" logic used `setState` inside a `useEffect`, which the
+`react-hooks/set-state-in-effect` rule flagged as unnecessary and
+render-cascade-prone. Fixed using React's documented "adjust state during
+render" pattern (comparing against a stored previous `state` value)
+instead of an effect.
+
+**A test-script mistake caught before it was believed**: the first version
+of the edit-event browser test filled in the *add-event* form instead of
+the *edit* form, because both forms use identically-named fields
+(`name="title"`, etc.) and the test's selector wasn't scoped to the
+specific event being edited. The edit action itself was never broken —
+its own default values just got resubmitted unchanged. Caught by checking
+the database directly rather than trusting the on-page text check, same
+lesson as the `.ics` feed and remove-member checks in the previous
+session. Re-ran with a properly scoped selector and confirmed via the
+database that the edit genuinely persisted.
+
+**Still open, unchanged from before:** Google OAuth needs the user's own
+Cloud project; deployment needs the user's choice of host; no email
+verification on signup; only Google syncs a calendar in (Outlook/iCloud
+can't connect the same way); no automated test suite committed to the
+repo (verification here was manual, scripted Playwright runs against a
+live dev server, the same as last time).

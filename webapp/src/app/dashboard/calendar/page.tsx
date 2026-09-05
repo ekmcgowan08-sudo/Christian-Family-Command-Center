@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { deleteEvent } from "@/lib/actions/calendar";
 import { AddEventForm } from "./add-event-form";
+import { EventItem } from "./event-item";
 
 function formatRange(start: Date, end: Date, allDay: boolean) {
   if (allDay) {
@@ -60,37 +60,7 @@ export default async function CalendarPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {upcoming.map((event) => (
-              <li
-                key={event.id}
-                className="flex items-start justify-between gap-4 rounded-xl border border-brand-border bg-brand-card px-4 py-3"
-              >
-                <div>
-                  <p className="font-medium">{event.title}</p>
-                  <p className="text-sm text-foreground/70">
-                    {formatRange(event.startAt, event.endAt, event.allDay)}
-                  </p>
-                  {event.location && (
-                    <p className="text-xs text-foreground/60">{event.location}</p>
-                  )}
-                  <p className="mt-1 text-xs text-brand-gold">
-                    {event.source === "GOOGLE"
-                      ? "Synced from Google Calendar"
-                      : event.createdBy
-                        ? `Added by ${event.createdBy.name}`
-                        : "Added manually"}
-                  </p>
-                </div>
-                {event.source === "MANUAL" && (
-                  <form action={deleteEvent.bind(null, event.id)}>
-                    <button
-                      type="submit"
-                      className="text-xs font-medium text-red-600 hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </form>
-                )}
-              </li>
+              <EventItem key={event.id} event={event} />
             ))}
           </ul>
         )}

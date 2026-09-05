@@ -43,6 +43,22 @@ model User {
   googleAccount GoogleAccount?
   createdEvents CalendarEvent[] @relation("EventCreator")
   sentInvites   Invite[]        @relation("InviteSender")
+  resetTokens   PasswordResetToken[]
+}
+
+// A one-time, short-lived token emailed to a user who requested a
+// password reset. Consumed (usedAt set) on first successful use.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique @default(cuid())
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  @@index([userId])
 }
 
 // A member's own connected Google account. Separate from login --
