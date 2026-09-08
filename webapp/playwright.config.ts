@@ -1,19 +1,25 @@
+import { existsSync } from "node:fs";
 import { defineConfig } from "@playwright/test";
 import { BASE_URL, PORT, TEST_DATABASE_URL } from "./e2e/env";
+
+// This sandbox ships a pre-installed Chromium at a fixed path so tests
+// don't need to download one. Elsewhere (a normal machine, CI) it won't
+// exist -- fall back to Playwright's own managed browser in that case
+// (run `npx playwright install chromium` once there).
+const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium";
+const executablePath = existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined;
 
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   workers: 1,
-  retries: 0,
-  reporter: [["list"]],
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",
-    launchOptions: {
-      executablePath: "/opt/pw-browsers/chromium",
-    },
+    launchOptions: executablePath ? { executablePath } : {},
   },
   webServer: [
     {

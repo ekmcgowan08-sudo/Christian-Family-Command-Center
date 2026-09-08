@@ -842,3 +842,34 @@ deployment needs the user's choice of host; only Google syncs a calendar
 in. With this entry, both of the previously-named buildable gaps (email
 verification, an automated test suite) are done — everything remaining
 is the user's own action, not something further to build here.
+
+## 2026-09-08 — CI: the test suite now runs itself
+
+The Playwright suite added earlier today was only as good as someone
+remembering to run it. Added `.github/workflows/ci.yml` so it runs on
+every push and every pull request without anyone asking: type check,
+lint, build, then the full e2e run, against a real Postgres service
+container and Playwright's own downloaded Chromium (GitHub's runners
+don't have this sandbox's pre-installed one).
+
+**Made `playwright.config.ts` portable** in the process: it previously
+hardcoded this sandbox's Chromium path
+(`/opt/pw-browsers/chromium`), which doesn't exist on a normal machine
+or a GitHub Actions runner. It now checks whether that path exists and
+only uses it if so, otherwise leaving Playwright to launch its own
+managed browser -- the same config now works unmodified in this
+sandbox, on a contributor's laptop, and in CI.
+
+**Verified locally rather than trusting the YAML to be right on faith**:
+ran `npm ci --legacy-peer-deps` (what CI actually runs, not `npm install`)
+to confirm the lockfile is genuinely in sync, then re-ran `tsc --noEmit`,
+lint, build, and the full 16-test e2e suite against the reinstalled
+`node_modules` -- all still green. Local Postgres had stopped between
+sessions (a sandbox restart, not an app issue); restarted it
+(`pg_ctlcluster 16 main start`) before re-running rather than assuming
+the failure meant something was broken.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in. Everything else buildable without those two things is now
+done, including making sure the test suite actually runs on its own.

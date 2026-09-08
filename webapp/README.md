@@ -142,14 +142,18 @@ npm run test:e2e
 
 This needs your dev `DATABASE_URL` set (it derives its own
 `<database>_test` database from it — never your dev database — and
-creates it automatically) and a local Chromium (this repo assumes one at
-`/opt/pw-browsers/chromium`; on a normal machine run
-`npx playwright install chromium` once and drop the `executablePath`
-override in `playwright.config.ts`). `npm run test:e2e` also starts its
-own MailDev instance and its own Next.js dev server on port 3100 with
-SMTP pointed at that MailDev, so it won't collide with a `npm run dev`
-you already have running on port 3000, and it doesn't need real SMTP
-credentials.
+creates it automatically) and a Chromium Playwright can launch: it uses
+one at `/opt/pw-browsers/chromium` if present, otherwise run
+`npx playwright install chromium` once first. `npm run test:e2e` also
+starts its own MailDev instance and its own Next.js dev server on port
+3100 with SMTP pointed at that MailDev, so it won't collide with a
+`npm run dev` you already have running on port 3000, and it doesn't
+need real SMTP credentials.
+
+This same suite runs automatically in GitHub Actions
+(`.github/workflows/ci.yml`) on every push and pull request — type
+check, lint, build, then the full e2e run against a Postgres service
+container and Playwright's own downloaded Chromium.
 
 ## Known quirks of this Next.js/Prisma vintage
 
