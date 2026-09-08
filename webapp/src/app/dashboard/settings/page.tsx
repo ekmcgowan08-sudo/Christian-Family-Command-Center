@@ -2,7 +2,9 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { regenerateIcsToken } from "@/lib/actions/settings";
+import { isEmailConfigured } from "@/lib/email";
 import { ChangePasswordForm } from "./change-password-form";
+import { ResendVerification } from "./resend-verification";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -11,6 +13,12 @@ export default async function SettingsPage() {
   const family = await prisma.family.findUniqueOrThrow({
     where: { id: session.user.familyId },
   });
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { emailVerifiedAt: true },
+  });
+  const emailConfigured = isEmailConfigured();
 
   const headerList = await headers();
   const host = headerList.get("host");
@@ -51,6 +59,25 @@ export default async function SettingsPage() {
           </form>
         )}
       </section>
+
+      {emailConfigured && (
+        <section>
+          <h2 className="text-lg font-semibold text-brand-green">Email verification</h2>
+          {currentUser?.emailVerifiedAt ? (
+            <p className="mt-1 text-sm text-green-700">Your email address is verified.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-foreground/70">
+                Your email address hasn&apos;t been confirmed yet. Verifying it means your family
+                can reach you and you can reset your password if you ever need to.
+              </p>
+              <div className="mt-3">
+                <ResendVerification />
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <section>
         <h2 className="text-lg font-semibold text-brand-green">Password</h2>

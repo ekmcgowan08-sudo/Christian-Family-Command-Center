@@ -89,6 +89,28 @@ export async function sendInviteEmail(opts: {
   });
 }
 
+export async function sendVerificationEmail(opts: { to: string; name: string; verifyUrl: string }) {
+  const html = wrapTemplate(
+    "Confirm your email address",
+    `<p style="font-size:14px;line-height:1.6;">Hi ${opts.name}, just confirming this is really
+      your email address so your family can reach you and reset your password if you ever need to.</p>
+     <p style="margin:24px 0;">
+       <a href="${opts.verifyUrl}" style="background:${BRAND_GREEN};color:#ffffff;text-decoration:none;
+         padding:12px 20px;border-radius:999px;font-weight:bold;font-size:14px;">Confirm email</a>
+     </p>
+     <p style="font-size:12px;color:#6b5f4d;">This link expires in 24 hours. You can request a new
+       one anytime from Settings.</p>`
+  );
+  const text = `Hi ${opts.name}, please confirm your email address: ${opts.verifyUrl}\n\nThis link expires in 24 hours.`;
+
+  await sendEmail({
+    to: opts.to,
+    subject: "Confirm your email address",
+    html,
+    text,
+  });
+}
+
 export async function sendPasswordResetEmail(opts: { to: string; resetUrl: string }) {
   const html = wrapTemplate(
     "Reset your password",

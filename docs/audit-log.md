@@ -710,3 +710,65 @@ verification on signup; only Google syncs a calendar in (Outlook/iCloud
 can't connect the same way); no automated test suite committed to the
 repo (verification here was manual, scripted Playwright runs against a
 live dev server, the same as last time).
+
+## 2026-09-08 — Email verification on signup
+
+Continuing the same "keep going" pass, with the two remaining buildable
+gaps named as email verification and a committed automated test suite
+(Google OAuth credentials and choosing a host remain the user's own
+action, not something buildable here). This entry covers email
+verification; the test suite follows in a later entry.
+
+**Email verification**, built on the existing generic-SMTP email
+infrastructure and following the same graceful-degradation pattern as
+invites and password reset:
+- Added `emailVerifiedAt` to `User` and a new single-use, 24-hour-expiry
+  `EmailVerificationToken` model.
+- Both signup flows (new family, join by invite) now send a verification
+  email right after account creation, if email is configured — silently
+  skipped otherwise, exactly like invite emails already do.
+- A `/verify-email?token=...` page auto-submits the token on load and
+  reports success, an invalid/expired-token error, or a missing-token
+  message.
+- A dismissed-on-verify reminder banner appears at the top of every
+  dashboard page for an unverified user, with a "resend" button — but
+  only when email is configured, so families that never set up SMTP never
+  see it. The banner's verified/unverified state is read fresh from the
+  database on every page load rather than stored in the session/JWT,
+  specifically to avoid showing a stale "still unverified" banner after a
+  user clicks the link in a different tab or browser than the one they're
+  logged in on.
+- Settings gained a matching "Email verification" section: a confirmation
+  message once verified, or the same resend button beforehand. Also only
+  shown when email is configured.
+- This is deliberately non-blocking — an unverified family member can
+  still use the app. Gating login on it risked locking a family out over
+  a missed email, which is a worse failure mode than an unverified email
+  address.
+
+**Verified with a live dev server, MailDev, and direct database checks:**
+signed up a new family, confirmed the reminder banner appeared, pulled
+the real verification email out of MailDev's API, extracted the token,
+visited the verify link, confirmed the banner disappeared and Settings
+showed "verified" — then confirmed `emailVerifiedAt` and the token's
+`usedAt` were actually set in Postgres, not just that the page said so.
+Also verified the edge cases: reusing an already-used token, a bogus
+token, and a missing token all show the correct message instead of
+silently succeeding or crashing; and re-ran the whole signup flow with
+SMTP intentionally unconfigured to confirm signup still completes cleanly
+and neither the banner nor the Settings section appear at all.
+
+**A real bug caught by a console-error check, not by eye**: the
+verify-email page's initial version called the `useActionState` action
+function directly from a `useEffect` to auto-submit the token on load.
+That worked, but React logged "called outside of a transition" because
+the call wasn't wrapped in `startTransition`, meaning `pending` wouldn't
+reliably reflect the in-flight request. Fixed by wrapping the effect's
+`formAction` call in `startTransition`, confirmed the warning is gone by
+checking for zero console errors, not just that the page rendered.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a calendar
+in; no automated test suite committed to the repo yet (this remains
+manual, scripted Playwright runs against a live dev server — the next
+entry addresses this).

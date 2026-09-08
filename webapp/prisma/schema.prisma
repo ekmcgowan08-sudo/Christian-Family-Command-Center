@@ -38,12 +38,39 @@ model User {
   passwordHash  String
   role          Role     @default(MEMBER)
 
+  // Null until the user clicks a verification link. Never blocks login --
+  // see EmailVerificationToken below for why -- just powers a reminder
+  // banner and lets a family know an email address is confirmed reachable.
+  emailVerifiedAt DateTime?
+
   createdAt     DateTime @default(now())
 
   googleAccount GoogleAccount?
   createdEvents CalendarEvent[] @relation("EventCreator")
   sentInvites   Invite[]        @relation("InviteSender")
   resetTokens   PasswordResetToken[]
+  verificationTokens EmailVerificationToken[]
+}
+
+// A one-time, 24-hour-lived token emailed on signup (and resendable from
+// Settings) to confirm a member's email address is real and reachable.
+// Deliberately does NOT block login while unverified: this is a family
+// tool, not a public signup form, and locking someone out because a
+// spam filter ate one email would be a worse failure mode than a soft
+// reminder banner. If email isn't configured at all, no token is ever
+// created and the reminder never shows -- there'd be nothing the user
+// could do about it.
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique @default(cuid())
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  @@index([userId])
 }
 
 // A one-time, short-lived token emailed to a user who requested a

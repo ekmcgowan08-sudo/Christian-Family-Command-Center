@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
+import { sendVerificationForUser } from "@/lib/actions/email-verification";
 
 const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters.");
@@ -42,7 +43,7 @@ export async function signupNewFamily(
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await prisma.family.create({
+  const family = await prisma.family.create({
     data: {
       name: familyName,
       members: {
@@ -54,8 +55,10 @@ export async function signupNewFamily(
         },
       },
     },
+    include: { members: true },
   });
 
+  await sendVerificationForUser(family.members[0].id);
   await doSignIn(email, password);
   return { success: true };
 }
@@ -98,7 +101,7 @@ export async function signupWithInvite(
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await prisma.$transaction([
+  const [newUser] = await prisma.$transaction([
     prisma.user.create({
       data: {
         familyId: invite.familyId,
@@ -114,6 +117,7 @@ export async function signupWithInvite(
     }),
   ]);
 
+  await sendVerificationForUser(newUser.id);
   await doSignIn(email, password);
   return { success: true };
 }

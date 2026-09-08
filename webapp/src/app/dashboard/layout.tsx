@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { logout } from "@/lib/actions/logout";
+import { prisma } from "@/lib/prisma";
+import { isEmailConfigured } from "@/lib/email";
+import { VerifyBanner } from "@/app/dashboard/verify-banner";
 
 const NAV = [
   { href: "/dashboard", label: "Home" },
@@ -17,6 +20,15 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
+
+  let showVerifyBanner = false;
+  if (session?.user.id && isEmailConfigured()) {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { emailVerifiedAt: true },
+    });
+    showVerifyBanner = Boolean(user && !user.emailVerifiedAt);
+  }
 
   return (
     <div className="flex flex-1 flex-col md:flex-row">
@@ -52,7 +64,10 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      <main className="flex-1 bg-brand-cream px-6 py-8 md:px-10">{children}</main>
+      <main className="flex-1 bg-brand-cream px-6 py-8 md:px-10">
+        {showVerifyBanner && <VerifyBanner />}
+        {children}
+      </main>
     </div>
   );
 }
