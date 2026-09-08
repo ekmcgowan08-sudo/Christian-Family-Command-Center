@@ -117,6 +117,40 @@ host. Three straightforward options:
   entry in Google Cloud Console) to your real domain — it must exactly
   match `https://your-domain.com/api/google/callback`.
 
+## Testing
+
+A committed Playwright suite (`e2e/`) covers the golden paths end-to-end
+against a real browser, a real dedicated database, and real email
+delivery — no mocks:
+
+- `e2e/auth.spec.ts` — signup, login, logout, wrong-password rejection,
+  duplicate-email rejection, and the `/dashboard` auth guard.
+- `e2e/calendar.spec.ts` — adding, editing, and removing calendar events.
+- `e2e/family.spec.ts` — creating an invite, joining with it as a second
+  member, removing a member, and revoking an unused invite.
+- `e2e/password-reset.spec.ts` — the full forgot-password flow via a real
+  emailed link, including single-use enforcement and the generic
+  unknown-email response.
+- `e2e/email-verification.spec.ts` — the signup verification email,
+  the verify link, reused/expired tokens, and the resend button.
+
+Run it with:
+
+```bash
+npm run test:e2e
+```
+
+This needs your dev `DATABASE_URL` set (it derives its own
+`<database>_test` database from it — never your dev database — and
+creates it automatically) and a local Chromium (this repo assumes one at
+`/opt/pw-browsers/chromium`; on a normal machine run
+`npx playwright install chromium` once and drop the `executablePath`
+override in `playwright.config.ts`). `npm run test:e2e` also starts its
+own MailDev instance and its own Next.js dev server on port 3100 with
+SMTP pointed at that MailDev, so it won't collide with a `npm run dev`
+you already have running on port 3000, and it doesn't need real SMTP
+credentials.
+
 ## Known quirks of this Next.js/Prisma vintage
 
 This project was built against a very new Next.js (16.3) and an in-flux

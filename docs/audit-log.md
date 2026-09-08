@@ -772,3 +772,73 @@ deployment needs the user's choice of host; only Google syncs a calendar
 in; no automated test suite committed to the repo yet (this remains
 manual, scripted Playwright runs against a live dev server — the next
 entry addresses this).
+
+## 2026-09-08 — Committed automated Playwright test suite
+
+The last of the two remaining buildable gaps named in the previous
+entry. Until now every feature in this app had been verified with
+one-off, uncommitted Playwright scripts run by hand during development —
+useful in the moment, but nothing a future change could be checked
+against. This adds a real, permanent, `npm run test:e2e`-able suite.
+
+**What was built**, all under `webapp/e2e/`:
+- `playwright.config.ts` (`@playwright/test`, pinned as a real
+  devDependency, launched against the pre-installed Chromium rather than
+  downloading its own) starts two throwaway servers for the run: MailDev
+  on its usual ports, and a Next.js dev server on port 3100 (distinct
+  from a developer's own `npm run dev` on 3000) with `DATABASE_URL`
+  pointed at a dedicated `<dbname>_test` database and SMTP pointed at
+  that MailDev instance.
+- `e2e/global-setup.ts` creates that test database if it doesn't exist,
+  runs `prisma migrate deploy` against it, and truncates every table
+  before the run starts — so the suite never touches the real dev
+  database and every run starts from a clean slate.
+- `e2e/helpers.ts` — shared signup/login/logout helpers, a
+  unique-email generator (so parallel or repeated runs never collide),
+  and a `waitForEmail`/`extractToken` pair that polls MailDev's real API
+  and pulls a real token out of a real delivered email, the same
+  technique used by hand in the last two entries.
+- Five spec files covering the app's actual feature set: auth
+  (signup/login/logout/route-guard/duplicate-email), calendar
+  (add/edit/remove), family (invite/join/remove-member/revoke-invite),
+  password reset (request/reset/reuse-rejected/generic-unknown-email),
+  and email verification (verify/reuse-rejected/resend). Every test
+  asserts against the real Postgres test database, not just what the
+  page displays.
+
+**Three real bugs the suite caught immediately, none of them in the
+application's actual auth/data logic:**
+1. The Next.js dev-mode route indicator (a fixed overlay in the corner
+   of every page) was intercepting Playwright's clicks on the "Log out"
+   button, timing out the affected tests. Fixed by setting
+   `devIndicators: false` in `next.config.ts` — it's a dev-only
+   convenience overlay, not a real feature, and it isn't worth keeping
+   at the cost of an overlay that can eat real clicks underneath it.
+2. `getByRole("alert")` matched two elements on every page, not one:
+   Next.js's own route announcer (`#__next-route-announcer__`) also
+   carries `role="alert"`, invisible and always empty. Any assertion
+   using it threw a strict-mode violation the moment a real alert was
+   also on the page. Fixed by asserting on the visible error text
+   directly instead of the ARIA role.
+3. The suite's own `logout()` test helper clicked the "Log out" button
+   and immediately checked `page.url()` without waiting for the
+   resulting redirect to complete — a race that made logout look broken
+   (still on `/dashboard`, session cookie still present) when it wasn't.
+   Confirmed with a throwaway debug spec that captured the real
+   network responses and cookie state: logout's redirect to `/` and its
+   cookie clearing both complete correctly, just not synchronously with
+   the click. Fixed by having the helper `waitForURL` the landing page
+   before returning.
+
+**Verified by actually running it**, repeatedly, watching real failures
+turn into real passes as each cause above was found and fixed, not just
+by writing tests and assuming they'd work: 16/16 specs pass on a clean
+run. Also re-ran `npx tsc --noEmit`, `npm run lint`, and `npm run build`
+after adding the suite (and after the `devIndicators` change) to confirm
+nothing else regressed.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a calendar
+in. With this entry, both of the previously-named buildable gaps (email
+verification, an automated test suite) are done — everything remaining
+is the user's own action, not something further to build here.
