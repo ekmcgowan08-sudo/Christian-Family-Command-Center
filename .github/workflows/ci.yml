@@ -45,6 +45,12 @@ jobs:
       # under the plain resolver -- see "Known quirks" in webapp/README.md.
       - run: npm ci --legacy-peer-deps
 
+      # tsconfig.json includes .next/types/**/*.ts, which holds Next's
+      # generated helpers (e.g. LayoutProps) that src/app/layout.tsx uses --
+      # they don't exist on a fresh checkout until this generates them.
+      - name: Generate Next's route types
+        run: npx next typegen
+
       - name: Type check
         run: npx tsc --noEmit
 
