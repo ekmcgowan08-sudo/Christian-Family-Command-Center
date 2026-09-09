@@ -931,3 +931,33 @@ deployment needs the user's choice of host (and, per the new rate-limit
 docs in the README, a reverse proxy in front if self-hosting directly,
 for the IP-based limits to distinguish real clients); only Google syncs
 a calendar in.
+
+## 2026-09-09 — Baseline security response headers
+
+A quick, low-risk hardening pass alongside rate limiting. Added
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy`
+denying camera/microphone/geolocation (nothing in this app uses any of
+them), and `Strict-Transport-Security` to every response via
+`next.config.ts`'s `headers()`. Confirmed there's no `iframe` or
+`dangerouslySetInnerHTML` anywhere in the app before adding
+`X-Frame-Options: DENY`, so it can't be breaking a legitimate embed.
+
+Deliberately did **not** add a Content-Security-Policy. Next.js's own
+hydration relies on inline scripts, and getting a nonce-based CSP right
+without silently breaking dev-mode HMR or something subtle in production
+needs more than a page-load smoke test to be confident in -- these five
+headers are the well-understood, low-risk wins that don't carry that
+failure mode. Worth doing properly later if this is ever exposed more
+broadly than a family's own dashboard.
+
+**Verified**: curled a running dev server directly and confirmed all five
+headers on both a page route and an API route, then ran the full 17-test
+e2e suite (which exercises real browser page loads across the whole app)
+to confirm nothing broke -- all passing.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host (and, as before, a reverse
+proxy in front if self-hosting directly, both for HTTPS and so the
+IP-based rate limits can see real client IPs); only Google syncs a
+calendar in.

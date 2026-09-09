@@ -129,6 +129,14 @@ host. Three straightforward options:
   entry in Google Cloud Console) to your real domain — it must exactly
   match `https://your-domain.com/api/google/callback`.
 
+Every response also carries baseline security headers (`X-Frame-Options`,
+`X-Content-Type-Options`, `Referrer-Policy`, a restrictive
+`Permissions-Policy`, and `Strict-Transport-Security`) set in
+`next.config.ts`. If you're self-hosting directly rather than behind a
+platform that already terminates TLS, put a reverse proxy (nginx, Caddy,
+Traefik) in front for HTTPS — the same proxy also makes the IP-based
+half of rate limiting work, see below.
+
 ## Testing
 
 A committed Playwright suite (`e2e/`) covers the golden paths end-to-end
