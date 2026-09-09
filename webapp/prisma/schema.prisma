@@ -88,6 +88,18 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// A single timestamped hit against a rate limit, keyed by whatever the
+// caller chooses (e.g. "login:1.2.3.4:jo@example.com"). Stored in Postgres
+// rather than in-memory so limits hold up across serverless invocations
+// and multiple app instances, not just a single long-running process.
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
 // A member's own connected Google account. Separate from login --
 // this is only used for pulling in Calendar/Gmail data, opt-in per user.
 model GoogleAccount {

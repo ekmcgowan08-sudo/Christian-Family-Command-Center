@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendVerificationEmail } from "@/lib/email";
 import type { ActionResult } from "@/lib/actions/auth";
+import { checkRateLimit, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 
 /**
  * Creates a verification token and emails it, if email is configured.
@@ -77,6 +78,12 @@ export async function resendVerificationEmail(): Promise<ResendResult> {
   if (user.emailVerifiedAt) {
     return { success: true, message: "Your email is already verified." };
   }
+
+  const allowed = await checkRateLimit(`resend-verify:${user.id}`, {
+    max: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!allowed) return { error: RATE_LIMIT_MESSAGE };
 
   await sendVerificationForUser(user.id);
   return { success: true, message: "Verification email sent -- check your inbox." };

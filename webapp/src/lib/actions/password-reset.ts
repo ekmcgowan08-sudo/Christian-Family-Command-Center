@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendPasswordResetEmail } from "@/lib/email";
 import type { ActionResult } from "@/lib/actions/auth";
+import { checkIpRateLimit, checkRateLimit, getClientIp, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 
 const requestSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address."),
@@ -24,6 +25,21 @@ export async function requestPasswordReset(
   const parsed = requestSchema.safeParse({ email: formData.get("email") });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  // Keyed by email (stops repeatedly emailing one inbox, real account or
+  // not -- it never reveals which) and by IP (stops iterating over many
+  // addresses from one source).
+  const ip = await getClientIp();
+  const [emailAllowed, ipAllowed] = await Promise.all([
+    checkRateLimit(`password-reset:${parsed.data.email}`, {
+      max: 5,
+      windowMs: 60 * 60 * 1000,
+    }),
+    checkIpRateLimit("password-reset", ip, { max: 20, windowMs: 60 * 60 * 1000 }),
+  ]);
+  if (!emailAllowed || !ipAllowed) {
+    return { error: RATE_LIMIT_MESSAGE };
   }
 
   if (!isEmailConfigured()) {

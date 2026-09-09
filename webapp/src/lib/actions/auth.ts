@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
 import { sendVerificationForUser } from "@/lib/actions/email-verification";
+import { checkIpRateLimit, checkRateLimit, getClientIp, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 
 const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters.");
@@ -25,6 +26,10 @@ export async function signupNewFamily(
   _prevState: ActionResult | null,
   formData: FormData
 ): Promise<ActionResult> {
+  const ip = await getClientIp();
+  const allowed = await checkIpRateLimit("signup", ip, { max: 30, windowMs: 60 * 60 * 1000 });
+  if (!allowed) return { error: RATE_LIMIT_MESSAGE };
+
   const parsed = newFamilySchema.safeParse({
     familyName: formData.get("familyName"),
     name: formData.get("name"),
@@ -75,6 +80,10 @@ export async function signupWithInvite(
   _prevState: ActionResult | null,
   formData: FormData
 ): Promise<ActionResult> {
+  const ip = await getClientIp();
+  const allowed = await checkIpRateLimit("signup", ip, { max: 30, windowMs: 60 * 60 * 1000 });
+  if (!allowed) return { error: RATE_LIMIT_MESSAGE };
+
   const parsed = joinFamilySchema.safeParse({
     code: formData.get("code"),
     name: formData.get("name"),
@@ -148,6 +157,20 @@ export async function login(
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  // Two limits: one per IP (stops credential stuffing across many
+  // accounts from one source; skipped when the IP is unknown rather than
+  // lumping every unproxied visitor into one bucket) and one per account
+  // (stops brute-forcing a single password even if the attacker spreads
+  // guesses across many IPs).
+  const ip = await getClientIp();
+  const [ipAllowed, accountAllowed] = await Promise.all([
+    checkIpRateLimit("login", ip, { max: 30, windowMs: 15 * 60 * 1000 }),
+    checkRateLimit(`login:account:${parsed.data.email}`, { max: 8, windowMs: 15 * 60 * 1000 }),
+  ]);
+  if (!ipAllowed || !accountAllowed) {
+    return { error: RATE_LIMIT_MESSAGE };
   }
 
   try {

@@ -873,3 +873,61 @@ the failure meant something was broken.
 deployment needs the user's choice of host; only Google syncs a
 calendar in. Everything else buildable without those two things is now
 done, including making sure the test suite actually runs on its own.
+
+## 2026-09-09 — Rate limiting on auth-related actions
+
+A real gap noticed while looking for what else was buildable without the
+user's own action: login, signup, password-reset requests, and resending
+a verification email had no rate limiting at all. Anyone could brute-force
+a password, spam a victim's inbox with reset or verification emails, or
+mass-create junk families, all without any friction.
+
+**Added `lib/rate-limit.ts`**, backed by a new `RateLimitHit` Postgres
+table rather than an in-memory counter -- this app already requires
+Postgres everywhere it can run, so it's shared state that holds up across
+serverless invocations and multiple app instances, unlike a plain
+in-memory Map. Wired into:
+- **login**: 8 attempts per 15 minutes per account (keyed by email, so
+  spreading guesses across many IPs doesn't help), plus 30 per 15 minutes
+  per IP where one is visible (stops credential stuffing across many
+  different accounts from one source).
+- **signup** (both new-family and join-by-invite): 30 per hour per IP.
+- **password-reset requests**: 5 per hour per email (stops repeatedly
+  emailing one inbox, real account or not) plus 20 per hour per IP.
+- **resend verification email**: 5 per hour per user (already
+  authenticated, so keyed by user id, no IP needed).
+
+**A real bug caught by running the full test suite, not just the new
+test**: IP-based limits use `X-Forwarded-For`/`X-Real-IP`, which only a
+reverse proxy sets. The first version fell back to a literal `"unknown"`
+key when neither header was present, which seemed harmless until the
+full e2e suite (this sandbox's dev server sees a real, consistent IP,
+not "unknown") tripped the 10-per-hour signup limit partway through --
+19 signup-flow calls across the whole suite, all counted against one
+shared bucket. Diagnosed by bisecting which combination of spec files
+reproduced it, then reading Playwright's saved page snapshot for a
+failure, which showed the actual rendered alert: "Too many attempts."
+That confirmed the real cause (limit too tight for legitimate burst
+traffic, not a logic bug) rather than the IP-fallback theory tried first.
+Fixed by raising the signup limit to 30/hour and, separately but still
+worthwhile, changing the "no IP visible" case to skip IP-based checks
+entirely instead of collapsing every unproxied visitor into one bucket
+-- the right behavior for a self-hosted deployment with no reverse proxy
+in front, where every real user would otherwise be limited against each
+other instead of against nobody.
+
+**Added `e2e/rate-limit.spec.ts`** so the feature itself has coverage,
+not just proof that it doesn't false-positive: repeatedly logs in with a
+wrong password against one account until the response changes from
+"incorrect password" to "too many attempts," then confirms the *correct*
+password is also rejected while the limit holds (otherwise this would
+only be throttling wrong guesses, not actually protecting the account).
+
+**Verified**: full clean-room rehearsal (lint, typegen, tsc, build) plus
+all 17 e2e tests, including the new one, passing together in one run.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host (and, per the new rate-limit
+docs in the README, a reverse proxy in front if self-hosting directly,
+for the IP-based limits to distinguish real clients); only Google syncs
+a calendar in.

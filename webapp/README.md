@@ -49,6 +49,18 @@ having to be handed a copy-pasted URL.
   without it configured, both invite links and password reset degrade
   gracefully (a copy-paste link, and a clear "not set up yet" message,
   respectively) rather than failing silently.
+- **RateLimitHit** backs rate limiting on login, signup, password-reset
+  requests, and resending a verification email, stored in Postgres
+  (rather than in-memory) so it holds up across multiple app instances
+  or serverless invocations. Login and password-reset are limited both
+  per-account (so an attacker can't just spread guesses across many IPs)
+  and per-IP where an IP is visible; signup is limited per-IP only, since
+  there's no account yet to key on. IP-based limits rely on
+  `X-Forwarded-For`/`X-Real-IP`, which Vercel/Railway/Render set
+  automatically and a self-hosted Docker deployment gets from whatever
+  reverse proxy terminates TLS in front of it; without either header
+  present, those specific limits no-op rather than lumping every visitor
+  into one shared bucket.
 
 ## Local setup
 
