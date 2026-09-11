@@ -1034,3 +1034,63 @@ rather than anywhere it shouldn't. Ran the full clean-room rehearsal
 **Still open:** Google OAuth needs the user's own Cloud project;
 deployment needs the user's choice of host; only Google syncs a calendar
 in.
+
+## 2026-09-11 — Leave a family, or delete one entirely
+
+A real account-lifecycle gap: there was no self-service way for a member
+to leave a family (they'd have to ask the owner to remove them), and no
+way for an owner to delete a family at all if they stopped using the
+app. Both are now on Settings, in a new "Danger zone" section.
+
+**Leave family** (non-owner members only): removes the member's own
+login and signs them out. Their manually-added calendar events stay on
+the family calendar -- `CalendarEvent.createdByUserId` uses
+`onDelete: SetNull` in the schema, so the event survives, just
+unattributed (shown as "Added manually" instead of "Added by X," the
+same as it already displays for any event without a creator). Any
+events synced in from their own Google Calendar *are* removed, since
+those aren't meaningful to keep once the member (and their Google
+connection) is gone -- explicitly cleaned up the same way
+`disconnectGoogleAccount` already does, since `CalendarEvent.sourceUserId`
+is a plain field, not a relation Prisma can cascade on.
+
+Owners can't leave this way -- there's no "transfer ownership" feature,
+so an owner leaving would orphan the family with no one able to manage
+it. The button simply isn't shown for owners; the action itself still
+guards this server-side too, matching the existing defensive-throw
+pattern the rest of `family.ts` (`removeMember`, etc.) already uses.
+
+**Delete family** (owners only): permanently deletes the family and
+everything in it -- members, events, invites, connected accounts --
+via `prisma.family.delete()`, which the schema's cascading relations
+already handle correctly in one call. Requires typing the family's
+exact name to confirm before the button is even enabled, the same
+friction pattern real apps use before an irreversible action that
+affects more than just the person clicking it (and the Settings copy
+tells them up front how many members will be affected).
+
+**Verified** with `e2e/family-lifecycle.spec.ts`: a member leaves,
+confirmed via direct database check that their login is gone, the rest
+of the family is untouched, and a manually-added event survives with
+its `createdByUserId` cleared to null (checked in the database, not
+just on the page). Separately, confirmed an owner has no "leave"
+button at all, that a wrong confirmation name is rejected, and that the
+correct name deletes the family, its owner, and everything else --
+again checked directly against Postgres, not just the redirect.
+
+**A real bug in the test, not the app**, caught by running the full
+suite rather than trusting the isolated run: the first version queried
+the database for the just-created invite immediately after clicking
+"Create invite link," without waiting for the server action to actually
+finish -- the same race `family.spec.ts` already knew to guard against
+with `await expect(page.getByText(/share this link/i)).toBeVisible()`
+before querying, which this new test had simply omitted. Fixed by
+adding the same wait.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 21 e2e tests passing together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; no way yet to transfer ownership to another member (would
+be needed before an owner could "leave" rather than delete outright).

@@ -5,6 +5,7 @@ import { regenerateIcsToken } from "@/lib/actions/settings";
 import { isEmailConfigured } from "@/lib/email";
 import { ChangePasswordForm } from "./change-password-form";
 import { ResendVerification } from "./resend-verification";
+import { LeaveFamilyButton, DeleteFamilyForm } from "./danger-zone";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
     select: { emailVerifiedAt: true },
   });
   const emailConfigured = isEmailConfigured();
+  const memberCount = await prisma.user.count({ where: { familyId: session.user.familyId } });
 
   const headerList = await headers();
   const host = headerList.get("host");
@@ -85,6 +87,35 @@ export default async function SettingsPage() {
         <div className="mt-3">
           <ChangePasswordForm />
         </div>
+      </section>
+
+      <section className="rounded-xl border border-red-200 bg-red-50/40 p-5">
+        <h2 className="text-lg font-semibold text-red-700">Danger zone</h2>
+        {session.user.role === "OWNER" ? (
+          <>
+            <p className="mt-1 text-sm text-foreground/70">
+              Permanently delete {family.name}
+              {memberCount > 1
+                ? ` and all ${memberCount} members' data`
+                : ""}{" "}
+              &mdash; every event, invite, and connected account. This can&apos;t be undone.
+            </p>
+            <div className="mt-3">
+              <DeleteFamilyForm familyName={family.name} />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-foreground/70">
+              Leave {family.name}. Your login is removed and any calendar events synced from
+              your Google account are taken down; events you added manually stay on the family
+              calendar.
+            </p>
+            <div className="mt-3">
+              <LeaveFamilyButton />
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

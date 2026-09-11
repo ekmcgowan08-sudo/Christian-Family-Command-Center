@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
+import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendInviteEmail } from "@/lib/email";
 import type { ActionResult } from "@/lib/actions/auth";
@@ -87,4 +87,64 @@ export async function removeMember(memberId: string) {
     where: { id: memberId, familyId: session.user.familyId },
   });
   revalidatePath("/dashboard/family");
+}
+
+/**
+ * Lets a non-owner member remove themselves from the family and sign
+ * out. Owners can't leave this way -- there's no "transfer ownership"
+ * feature yet, so an owner leaving would orphan the family. An owner who
+ * wants out entirely should use deleteFamily instead.
+ */
+export async function leaveFamily() {
+  const session = await auth();
+  if (!session) throw new Error("Not signed in.");
+  if (session.user.role === "OWNER") {
+    throw new Error(
+      "As the family owner, you can't leave this way -- delete the family instead, or have another owner remove you."
+    );
+  }
+
+  // CalendarEvent.sourceUserId isn't a foreign key Prisma can cascade on,
+  // so this member's synced Google events need cleaning up explicitly --
+  // same as disconnecting Google or turning off calendar sharing.
+  await prisma.calendarEvent.deleteMany({
+    where: { source: "GOOGLE", sourceUserId: session.user.id },
+  });
+  await prisma.user.delete({ where: { id: session.user.id } });
+
+  await signOut({ redirectTo: "/" });
+}
+
+/**
+ * Permanently deletes the whole family -- every member, every calendar
+ * event, every pending invite. Requires typing the family's exact name
+ * to confirm, the same friction real apps use before a destructive,
+ * unrecoverable action that affects more than just the person clicking
+ * the button.
+ */
+export async function deleteFamily(
+  _prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session) return { error: "Not signed in." };
+  if (session.user.role !== "OWNER") {
+    return { error: "Only a family owner can delete the family." };
+  }
+
+  const family = await prisma.family.findUniqueOrThrow({
+    where: { id: session.user.familyId },
+  });
+
+  const confirmName = formData.get("confirmName");
+  if (typeof confirmName !== "string" || confirmName !== family.name) {
+    return { error: `Type "${family.name}" exactly to confirm.` };
+  }
+
+  // Family -> User/CalendarEvent/Invite, and User -> GoogleAccount/tokens,
+  // all cascade in the schema -- one delete cleans up everything.
+  await prisma.family.delete({ where: { id: family.id } });
+
+  await signOut({ redirectTo: "/" });
+  return { success: true };
 }
