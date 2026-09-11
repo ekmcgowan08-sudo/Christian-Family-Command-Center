@@ -11,6 +11,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   google_missing_refresh_token:
     "Google didn't grant lasting access this time. Please try connecting again.",
   google_connect_failed: "Something went wrong connecting your Google account. Please try again.",
+  google_sync_failed:
+    "Couldn't sync your Google Calendar -- your access may have been revoked or expired. Try disconnecting and reconnecting your Google account below.",
 };
 
 export default async function IntegrationsPage({

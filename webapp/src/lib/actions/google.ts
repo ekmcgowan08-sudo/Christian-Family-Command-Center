@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncGoogleCalendarForUser } from "@/lib/google/calendar";
@@ -11,6 +12,22 @@ async function requireUserId() {
   return session.user.id;
 }
 
+/**
+ * Runs a Google Calendar sync and, on failure (most commonly a revoked or
+ * expired token -- Google access can lapse at any time, outside this
+ * app's control), redirects back to Settings with a message the user can
+ * act on instead of crashing the whole dashboard into Next's generic
+ * error page.
+ */
+async function syncOrRedirectToError(userId: string) {
+  try {
+    await syncGoogleCalendarForUser(userId);
+  } catch (err) {
+    console.error("Google Calendar sync failed", err);
+    redirect("/dashboard/integrations?error=google_sync_failed");
+  }
+}
+
 export async function setShareCalendar(share: boolean) {
   const userId = await requireUserId();
   await prisma.googleAccount.update({
@@ -19,7 +36,7 @@ export async function setShareCalendar(share: boolean) {
   });
 
   if (share) {
-    await syncGoogleCalendarForUser(userId);
+    await syncOrRedirectToError(userId);
   } else {
     // Pull this member's previously-synced events back out of the family view.
     await prisma.calendarEvent.deleteMany({
@@ -47,7 +64,7 @@ export async function disconnectGoogleAccount() {
 
 export async function syncNow() {
   const userId = await requireUserId();
-  await syncGoogleCalendarForUser(userId);
+  await syncOrRedirectToError(userId);
   revalidatePath("/dashboard/integrations");
   revalidatePath("/dashboard/calendar");
   revalidatePath("/dashboard");

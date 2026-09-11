@@ -961,3 +961,50 @@ deployment needs the user's choice of host (and, as before, a reverse
 proxy in front if self-hosting directly, both for HTTPS and so the
 IP-based rate limits can see real client IPs); only Google syncs a
 calendar in.
+
+## 2026-09-11 — Google Calendar sync failures no longer crash the dashboard
+
+Reviewed the Google Calendar/Gmail integration code, which hadn't been
+touched since the original build, looking for real robustness gaps. Found
+one: `syncGoogleCalendarForUser` (called from both the "Sync now" button
+and turning on calendar sharing) had no error handling at all. A revoked
+or expired Google token -- which can happen any time, entirely outside
+this app's control, e.g. the member removes the app's access from their
+Google Account settings, or a token simply expires -- would throw an
+uncaught exception straight through the server action. With no
+`error.tsx` anywhere in the app, that meant Next's generic, unstyled
+fallback error page for what is a completely foreseeable, recoverable
+condition.
+
+**Fixed both problems:**
+- `lib/actions/google.ts`'s `syncNow` and `setShareCalendar` now catch a
+  sync failure and redirect to `/dashboard/integrations?error=google_sync_failed`,
+  reusing the exact `ERROR_MESSAGES` convention the integrations page
+  already used for OAuth connect/callback errors -- not a new pattern,
+  the same one already there.
+- Added `src/app/dashboard/error.tsx` as a general safety net for any
+  other unforeseen action failure in the dashboard, styled to match the
+  rest of the app rather than Next's default, with "Try again" and "Back
+  to dashboard" options. (Noted in passing: Next 16 renamed this
+  boundary's recovery callback from `reset` to `retry` -- confirmed
+  against the actual doc for this version rather than assuming.)
+
+**Verified the failure mode is real, not hypothetical, without needing
+real Google credentials**: `getGoogleOAuthClient()` throws synchronously
+whenever `GOOGLE_CLIENT_ID`/`SECRET`/`REDIRECT_URI` aren't set, which is
+exactly this sandbox's (and this repo's default `.env.example`'s) state
+before someone does their own Google Cloud setup -- the same code path a
+revoked-token failure would hit in production, just a different specific
+cause. Added `e2e/google-sync-error.spec.ts`: signs up a user, inserts a
+`GoogleAccount` row directly (simulating a previously-connected member),
+clicks "Sync now," and confirms the app lands back on Integrations with
+the friendly message -- and that the rest of the dashboard (calendar
+page) still loads fine afterward -- instead of crashing.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 18 e2e tests, including the two new ones, passing
+together in one run.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a calendar
+in.
