@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { ErrorPanel } from "@/components/error-panel";
 
-export default function DashboardError({
+export default function RootError({
   error,
   retry,
 }: {
@@ -11,8 +11,8 @@ export default function DashboardError({
   retry: () => void;
 }) {
   useEffect(() => {
-    console.error("Dashboard error boundary caught:", error);
+    console.error("Root error boundary caught:", error);
   }, [error]);
 
-  return <ErrorPanel onRetry={retry} homeHref="/dashboard" homeLabel="Back to dashboard" />;
+  return <ErrorPanel onRetry={retry} homeHref="/" homeLabel="Go home" />;
 }

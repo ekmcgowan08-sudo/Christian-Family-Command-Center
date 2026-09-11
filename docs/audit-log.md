@@ -1008,3 +1008,29 @@ together in one run.
 **Still open:** Google OAuth needs the user's own Cloud project;
 deployment needs the user's choice of host; only Google syncs a calendar
 in.
+
+## 2026-09-11 — Root-level error and 404 pages
+
+Following on from the dashboard error boundary: everything *outside*
+`/dashboard` -- the public landing page, login, signup, forgot/reset
+password, verify-email -- still had no error boundary and no custom 404,
+so an unexpected failure there, or just a mistyped URL, fell through to
+Next's default unstyled pages instead of anything matching the app.
+
+Added `src/app/error.tsx` (root-level error boundary) and
+`src/app/not-found.tsx` (branded 404), both styled to match the rest of
+the app. Extracted the boundary UI both error pages share into
+`components/error-panel.tsx` rather than duplicating the same markup in
+`app/error.tsx` and `app/dashboard/error.tsx` -- each still passes its
+own "go back to ___" destination (home vs. dashboard).
+
+**Verified**: added `e2e/not-found.spec.ts` -- visits a nonexistent
+route, confirms a real 404 status code and the branded heading (not
+Next's default page), then confirms the "Go to dashboard" link correctly
+lands an unauthenticated visitor on `/login` via the existing auth guard
+rather than anywhere it shouldn't. Ran the full clean-room rehearsal
+(lint, typegen, tsc, build) and all 19 e2e tests together, passing.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a calendar
+in.
