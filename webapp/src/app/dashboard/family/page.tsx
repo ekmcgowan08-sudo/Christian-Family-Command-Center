@@ -1,25 +1,29 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { removeMember, revokeInvite } from "@/lib/actions/family";
+import { changeMemberRole, removeMember, revokeInvite } from "@/lib/actions/family";
 import { InviteForm } from "./invite-form";
 
 export default async function FamilyPage() {
   const session = await auth();
   if (!session) return null;
 
-  const [members, invites] = await Promise.all([
-    prisma.user.findMany({
-      where: { familyId: session.user.familyId },
-      orderBy: { createdAt: "asc" },
-      include: { googleAccount: true },
-    }),
-    session.user.role === "OWNER"
-      ? prisma.invite.findMany({
-          where: { familyId: session.user.familyId, usedAt: null },
-          orderBy: { createdAt: "desc" },
-        })
-      : Promise.resolve([]),
-  ]);
+  // Whether to show owner-only UI is decided from this freshly-queried
+  // list, not session.user.role -- the JWT only reflects role as of last
+  // login, and roles can now change after signup (see changeMemberRole),
+  // so a just-promoted or just-demoted member needs this to be current.
+  const members = await prisma.user.findMany({
+    where: { familyId: session.user.familyId },
+    orderBy: { createdAt: "asc" },
+    include: { googleAccount: true },
+  });
+  const isOwner = members.find((m) => m.id === session.user.id)?.role === "OWNER";
+
+  const invites = isOwner
+    ? await prisma.invite.findMany({
+        where: { familyId: session.user.familyId, usedAt: null },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   return (
     <div className="max-w-3xl">
@@ -52,22 +56,38 @@ export default async function FamilyPage() {
               <span className="text-xs text-foreground/50">
                 {member.googleAccount ? "Google connected" : "No Google account"}
               </span>
-              {session.user.role === "OWNER" && member.id !== session.user.id && (
-                <form action={removeMember.bind(null, member.id)}>
-                  <button
-                    type="submit"
-                    className="text-xs font-medium text-red-600 hover:underline"
+              {isOwner && member.id !== session.user.id && (
+                <>
+                  <form
+                    action={changeMemberRole.bind(
+                      null,
+                      member.id,
+                      member.role === "OWNER" ? "MEMBER" : "OWNER"
+                    )}
                   >
-                    Remove
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      className="text-xs font-medium text-brand-green hover:underline"
+                    >
+                      {member.role === "OWNER" ? "Make member" : "Make owner"}
+                    </button>
+                  </form>
+                  <form action={removeMember.bind(null, member.id)}>
+                    <button
+                      type="submit"
+                      className="text-xs font-medium text-red-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </>
               )}
             </div>
           </li>
         ))}
       </ul>
 
-      {session.user.role === "OWNER" && (
+      {isOwner && (
         <div className="mt-10">
           <h2 className="text-lg font-semibold text-brand-green">Invite a family member</h2>
           <p className="mt-1 text-sm text-foreground/70">

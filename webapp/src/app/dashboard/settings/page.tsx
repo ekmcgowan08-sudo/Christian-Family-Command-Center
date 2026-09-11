@@ -15,10 +15,13 @@ export default async function SettingsPage() {
     where: { id: session.user.familyId },
   });
 
+  // Role read fresh from the database, not session.user.role -- see the
+  // comment on the equivalent lookup in dashboard/family/page.tsx.
   const currentUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { emailVerifiedAt: true },
+    select: { emailVerifiedAt: true, role: true },
   });
+  const isOwner = currentUser?.role === "OWNER";
   const emailConfigured = isEmailConfigured();
   const memberCount = await prisma.user.count({ where: { familyId: session.user.familyId } });
 
@@ -50,7 +53,7 @@ export default async function SettingsPage() {
           Anyone with this link can view the family calendar, so only share it
           with your family. If it ever leaks, regenerate it below.
         </p>
-        {session.user.role === "OWNER" && (
+        {isOwner && (
           <form action={regenerateIcsToken} className="mt-3">
             <button
               type="submit"
@@ -91,7 +94,7 @@ export default async function SettingsPage() {
 
       <section className="rounded-xl border border-red-200 bg-red-50/40 p-5">
         <h2 className="text-lg font-semibold text-red-700">Danger zone</h2>
-        {session.user.role === "OWNER" ? (
+        {isOwner ? (
           <>
             <p className="mt-1 text-sm text-foreground/70">
               Permanently delete {family.name}

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendInviteEmail } from "@/lib/email";
+import { requireOwner } from "@/lib/require-owner";
 import type { ActionResult } from "@/lib/actions/auth";
 
 const inviteSchema = z.object({
@@ -18,10 +19,11 @@ export async function createInvite(
   _prevState: InviteResult | null,
   formData: FormData
 ): Promise<InviteResult> {
-  const session = await auth();
-  if (!session) return { error: "Not signed in." };
-  if (session.user.role !== "OWNER") {
-    return { error: "Only a family owner can invite new members." };
+  let session;
+  try {
+    session = await requireOwner("Only a family owner can invite new members.");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Not authorized." };
   }
 
   const parsed = inviteSchema.safeParse({
@@ -69,8 +71,7 @@ export async function createInvite(
 }
 
 export async function revokeInvite(inviteId: string) {
-  const session = await auth();
-  if (!session || session.user.role !== "OWNER") throw new Error("Not authorized.");
+  const session = await requireOwner();
 
   await prisma.invite.deleteMany({
     where: { id: inviteId, familyId: session.user.familyId, usedAt: null },
@@ -78,9 +79,24 @@ export async function revokeInvite(inviteId: string) {
   revalidatePath("/dashboard/family");
 }
 
+/**
+ * Promotes or demotes another member. Always leaves at least one owner
+ * behind: the caller must already be an owner, and can't target their
+ * own row, so the acting owner is never the one being demoted.
+ */
+export async function changeMemberRole(memberId: string, newRole: "OWNER" | "MEMBER") {
+  const session = await requireOwner();
+  if (memberId === session.user.id) throw new Error("You can't change your own role.");
+
+  await prisma.user.updateMany({
+    where: { id: memberId, familyId: session.user.familyId },
+    data: { role: newRole },
+  });
+  revalidatePath("/dashboard/family");
+}
+
 export async function removeMember(memberId: string) {
-  const session = await auth();
-  if (!session || session.user.role !== "OWNER") throw new Error("Not authorized.");
+  const session = await requireOwner();
   if (memberId === session.user.id) throw new Error("You can't remove yourself.");
 
   await prisma.user.deleteMany({
@@ -94,11 +110,18 @@ export async function removeMember(memberId: string) {
  * out. Owners can't leave this way -- there's no "transfer ownership"
  * feature yet, so an owner leaving would orphan the family. An owner who
  * wants out entirely should use deleteFamily instead.
+ *
+ * Checks the member's role fresh from the database, not the (possibly
+ * stale) JWT session -- someone freshly promoted to owner should be
+ * stopped here even if their session hasn't caught up yet.
  */
 export async function leaveFamily() {
   const session = await auth();
   if (!session) throw new Error("Not signed in.");
-  if (session.user.role === "OWNER") {
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (!user) throw new Error("User not found.");
+  if (user.role === "OWNER") {
     throw new Error(
       "As the family owner, you can't leave this way -- delete the family instead, or have another owner remove you."
     );
@@ -108,9 +131,9 @@ export async function leaveFamily() {
   // so this member's synced Google events need cleaning up explicitly --
   // same as disconnecting Google or turning off calendar sharing.
   await prisma.calendarEvent.deleteMany({
-    where: { source: "GOOGLE", sourceUserId: session.user.id },
+    where: { source: "GOOGLE", sourceUserId: user.id },
   });
-  await prisma.user.delete({ where: { id: session.user.id } });
+  await prisma.user.delete({ where: { id: user.id } });
 
   await signOut({ redirectTo: "/" });
 }
@@ -126,10 +149,11 @@ export async function deleteFamily(
   _prevState: ActionResult | null,
   formData: FormData
 ): Promise<ActionResult> {
-  const session = await auth();
-  if (!session) return { error: "Not signed in." };
-  if (session.user.role !== "OWNER") {
-    return { error: "Only a family owner can delete the family." };
+  let session;
+  try {
+    session = await requireOwner("Only a family owner can delete the family.");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Not authorized." };
   }
 
   const family = await prisma.family.findUniqueOrThrow({

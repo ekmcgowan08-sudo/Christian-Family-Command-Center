@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOwner } from "@/lib/require-owner";
 import type { ActionResult } from "@/lib/actions/auth";
 
 const changePasswordSchema = z
@@ -47,9 +48,7 @@ export async function changePassword(
 }
 
 export async function regenerateIcsToken() {
-  const session = await auth();
-  if (!session) throw new Error("Not signed in.");
-  if (session.user.role !== "OWNER") throw new Error("Only a family owner can do this.");
+  const session = await requireOwner();
 
   const { nanoid } = await import("nanoid");
   await prisma.family.update({

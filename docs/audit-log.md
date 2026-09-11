@@ -1094,3 +1094,63 @@ build) and all 21 e2e tests passing together.
 deployment needs the user's choice of host; only Google syncs a
 calendar in; no way yet to transfer ownership to another member (would
 be needed before an owner could "leave" rather than delete outright).
+
+## 2026-09-11 — Role management, and fixing a real privilege-staleness bug it exposed
+
+Added the natural next step flagged in the previous entry: an owner can
+now promote a member to owner or demote another owner back to member,
+via a "Make owner"/"Make member" button next to each member on the
+Family page (owner-only, can't target your own row -- consistent with
+the existing "can't remove yourself" pattern). This means a family can
+have more than one owner, e.g. both parents, and is a real step toward
+letting an owner eventually hand off and leave rather than only being
+able to delete the whole family.
+
+**This surfaced a genuine, pre-existing security bug**, not just a gap:
+this app's sessions are JWTs, and `session.user.role` is only as fresh
+as the token minted at last login -- it isn't re-validated against the
+database on every request. Before roles could change after signup, that
+staleness never mattered (a user's role was fixed at account creation).
+Once roles became mutable, it did: every owner-only action
+(`createInvite`, `revokeInvite`, `removeMember`, `regenerateIcsToken`,
+and the new `changeMemberRole`/`deleteFamily`) was checking the cached
+JWT role, meaning a **demoted owner would keep owner privileges until
+they happened to sign out** -- a real privilege-escalation-via-staleness
+issue, not merely a UX one. In the other direction, a freshly *promoted*
+member would be wrongly denied owner actions until they re-logged in.
+
+**Fixed at both layers, not just one** -- catching the second layer is
+the part worth calling out: 
+- Added `lib/require-owner.ts`, re-querying the user's role from
+  Postgres on every owner-gated action instead of trusting the session,
+  and swapped every owner-only action over to it.
+- First-pass testing caught that this wasn't enough: the *pages*
+  deciding whether to even render owner-only UI (`dashboard/family` and
+  `dashboard/settings`) were still branching on the same stale
+  `session.user.role`. A promoted member's action would have succeeded
+  server-side but the invite form simply wouldn't render for them; a
+  demoted user would see a dead "Invite" button that silently failed.
+  Fixed both pages to derive current role from data already being
+  queried fresh (the members list on the Family page; a `role` field
+  added to the existing per-user query on Settings) instead of the JWT.
+
+**Verified the actual bug, not just the fix's absence of a crash**:
+`e2e/family-roles.spec.ts` promotes a member using the *owner's* browser
+session, then -- without the member ever reloading, re-navigating, or
+re-logging in on their own already-open session -- confirms their page
+now shows owner UI and a `createInvite` call actually succeeds. The
+mirror test demotes an owner the same way and confirms their still-live
+session immediately loses owner UI. Both tests failed against the
+action-only fix (exactly reproducing the page-level bug) and passed only
+once both layers were fixed -- run in isolation and captured in the
+audit trail as the real signal that the first fix was incomplete.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 23 e2e tests passing together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; an owner still can't "leave" (only delete the family
+outright) even with a co-owner in place -- `leaveFamily` intentionally
+still refuses any OWNER, so that's a deliberate scope boundary for a
+future pass, not an oversight.
