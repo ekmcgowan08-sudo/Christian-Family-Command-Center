@@ -69,7 +69,7 @@ test.describe("leaving and deleting a family", () => {
     expect(survivedEvent?.createdByUserId).toBeNull();
   });
 
-  test("an owner cannot leave, but can delete the whole family with confirmation", async ({
+  test("a sole owner cannot leave, but can delete the whole family with confirmation", async ({
     page,
   }) => {
     const ownerEmail = uniqueEmail("owner-delete");
@@ -108,5 +108,67 @@ test.describe("leaving and deleting a family", () => {
 
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("an owner with a co-owner in place can leave, and the family carries on without them", async ({
+    page,
+    browser,
+  }) => {
+    const firstOwnerEmail = uniqueEmail("owner-handoff");
+    await signupNewFamily(page, {
+      familyName: "The Handoffs",
+      name: "First Owner",
+      email: firstOwnerEmail,
+      password: "supersecret123",
+    });
+
+    await page.goto("/dashboard/family");
+    await page.selectOption('select[name="role"]', "OWNER");
+    await page.click('button:has-text("Create invite link")');
+    await expect(page.getByText(/share this link/i)).toBeVisible();
+    const family = await prisma.family.findFirstOrThrow({ where: { name: "The Handoffs" } });
+    const invite = await prisma.invite.findFirstOrThrow({
+      where: { familyId: family.id, usedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const secondOwnerContext = await browser.newContext();
+    const secondOwnerPage = await secondOwnerContext.newPage();
+    const secondOwnerEmail = uniqueEmail("second-owner-handoff");
+    await secondOwnerPage.goto(`/signup?code=${invite.code}`);
+    await secondOwnerPage.fill('input[name="name"]', "Second Owner");
+    await secondOwnerPage.fill('input[name="email"]', secondOwnerEmail);
+    await secondOwnerPage.fill('input[name="password"]', "anotherpassword");
+    await secondOwnerPage.click('button[type="submit"]');
+    await secondOwnerPage.waitForURL("**/dashboard");
+
+    // With a co-owner in place, the first owner now gets a Leave option
+    // alongside Delete.
+    await page.goto("/dashboard/settings");
+    await expect(page.getByRole("button", { name: "Leave family" })).toBeVisible();
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.click('button:has-text("Leave family")');
+    await page.waitForURL((url) => url.pathname === "/");
+
+    const leftOwner = await prisma.user.findUnique({ where: { email: firstOwnerEmail } });
+    expect(leftOwner).toBeNull();
+
+    // The family itself must survive -- only the leaving owner's own row
+    // is gone, not the whole family (that's what deleteFamily is for).
+    const stillExists = await prisma.family.findUnique({ where: { id: family.id } });
+    expect(stillExists).not.toBeNull();
+
+    // The remaining owner, on their already-open session, keeps full
+    // access and now has no co-owner -- so their own Settings should
+    // show Delete but no Leave option (they're the sole owner again).
+    await secondOwnerPage.goto("/dashboard/family");
+    await expect(secondOwnerPage.getByText("First Owner")).not.toBeVisible();
+    await expect(secondOwnerPage.locator("li", { hasText: "Second Owner" })).toBeVisible();
+
+    await secondOwnerPage.goto("/dashboard/settings");
+    await expect(secondOwnerPage.getByRole("button", { name: "Leave family" })).toHaveCount(0);
+    await expect(secondOwnerPage.getByRole("button", { name: "Delete family" })).toBeVisible();
+
+    await secondOwnerContext.close();
   });
 });

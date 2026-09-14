@@ -1154,3 +1154,42 @@ calendar in; an owner still can't "leave" (only delete the family
 outright) even with a co-owner in place -- `leaveFamily` intentionally
 still refuses any OWNER, so that's a deliberate scope boundary for a
 future pass, not an oversight.
+
+## 2026-09-14 — An owner with a co-owner can now actually leave
+
+Closed the scope boundary noted at the end of the last entry: with role
+management in place, an owner no longer has to delete the whole family
+just to step away -- they can leave normally as long as at least one
+other owner is already there to keep managing it.
+
+`leaveFamily` now only blocks an owner when they're the *only* owner
+(checked fresh against Postgres, same as the rest of this feature area,
+not the JWT). Settings shows "Leave family" for anyone who can safely
+leave -- any non-owner, or an owner with a co-owner -- alongside "Delete
+family" for owners, with a note explaining why Leave is hidden for a
+sole owner ("promote another member first, or delete the family").
+
+**Verified** with a new case in `e2e/family-lifecycle.spec.ts`: two
+owners, the first leaves, and the database confirms their login is gone
+while the *family itself survives* (the meaningful distinction from
+`deleteFamily`, which was already covered) -- then, still using the
+second owner's original, already-open session, confirms they keep full
+owner access and their own Settings now correctly shows no Leave option
+(they're the sole owner again) alongside Delete. The existing sole-owner
+test (renamed for clarity, unchanged in behavior) continues to confirm
+the original restriction still holds when there's no one to hand off to.
+
+Caught another small locator collision in the test itself while writing
+this (not the app): `getByText("Second Owner")` matched both the
+sidebar and the members-list row ("Second Owner (you)"). Scoped it to
+the specific `<li>` the same way earlier specs already learned to.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 24 e2e tests passing together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in. Account/family lifecycle is now reasonably complete:
+join, invite, promote/demote, leave (solo or with a co-owner), and
+delete are all covered, self-service, and re-verify roles fresh from
+the database rather than trusting a cached session.

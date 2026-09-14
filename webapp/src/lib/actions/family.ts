@@ -106,13 +106,14 @@ export async function removeMember(memberId: string) {
 }
 
 /**
- * Lets a non-owner member remove themselves from the family and sign
- * out. Owners can't leave this way -- there's no "transfer ownership"
- * feature yet, so an owner leaving would orphan the family. An owner who
- * wants out entirely should use deleteFamily instead.
+ * Lets a member remove themselves from the family and sign out. An
+ * owner can only leave this way if at least one other owner is in
+ * place -- otherwise the family would be left with no one able to
+ * manage it, and the only way out is deleteFamily instead.
  *
- * Checks the member's role fresh from the database, not the (possibly
- * stale) JWT session -- someone freshly promoted to owner should be
+ * Checks the member's role and the family's other owners fresh from the
+ * database, not the (possibly stale) JWT session -- someone freshly
+ * promoted to owner, or whose only co-owner just left, should be
  * stopped here even if their session hasn't caught up yet.
  */
 export async function leaveFamily() {
@@ -121,10 +122,16 @@ export async function leaveFamily() {
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!user) throw new Error("User not found.");
+
   if (user.role === "OWNER") {
-    throw new Error(
-      "As the family owner, you can't leave this way -- delete the family instead, or have another owner remove you."
-    );
+    const otherOwners = await prisma.user.count({
+      where: { familyId: user.familyId, role: "OWNER", id: { not: user.id } },
+    });
+    if (otherOwners === 0) {
+      throw new Error(
+        "You're the only owner, so you can't leave this way -- promote another member to owner first, or delete the family instead."
+      );
+    }
   }
 
   // CalendarEvent.sourceUserId isn't a foreign key Prisma can cascade on,

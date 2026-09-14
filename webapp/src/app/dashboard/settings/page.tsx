@@ -25,6 +25,15 @@ export default async function SettingsPage() {
   const emailConfigured = isEmailConfigured();
   const memberCount = await prisma.user.count({ where: { familyId: session.user.familyId } });
 
+  // An owner can only leave if another owner is already in place --
+  // otherwise the family would be left with no one able to manage it.
+  const hasCoOwner = isOwner
+    ? (await prisma.user.count({
+        where: { familyId: session.user.familyId, role: "OWNER", id: { not: session.user.id } },
+      })) > 0
+    : false;
+  const canLeave = !isOwner || hasCoOwner;
+
   const headerList = await headers();
   const host = headerList.get("host");
   const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
@@ -92,11 +101,27 @@ export default async function SettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-red-200 bg-red-50/40 p-5">
+      <section className="space-y-4 rounded-xl border border-red-200 bg-red-50/40 p-5">
         <h2 className="text-lg font-semibold text-red-700">Danger zone</h2>
-        {isOwner ? (
-          <>
-            <p className="mt-1 text-sm text-foreground/70">
+
+        {canLeave && (
+          <div className={isOwner ? "border-b border-red-200 pb-4" : ""}>
+            <p className="text-sm text-foreground/70">
+              Leave {family.name}.{" "}
+              {isOwner &&
+                "Since another owner is already in place, the family keeps going without you. "}
+              Your login is removed and any calendar events synced from your Google account are
+              taken down; events you added manually stay on the family calendar.
+            </p>
+            <div className="mt-3">
+              <LeaveFamilyButton />
+            </div>
+          </div>
+        )}
+
+        {isOwner && (
+          <div>
+            <p className="text-sm text-foreground/70">
               Permanently delete {family.name}
               {memberCount > 1
                 ? ` and all ${memberCount} members' data`
@@ -106,18 +131,14 @@ export default async function SettingsPage() {
             <div className="mt-3">
               <DeleteFamilyForm familyName={family.name} />
             </div>
-          </>
-        ) : (
-          <>
-            <p className="mt-1 text-sm text-foreground/70">
-              Leave {family.name}. Your login is removed and any calendar events synced from
-              your Google account are taken down; events you added manually stay on the family
-              calendar.
-            </p>
-            <div className="mt-3">
-              <LeaveFamilyButton />
-            </div>
-          </>
+            {!hasCoOwner && (
+              <p className="mt-2 text-xs text-foreground/50">
+                You&apos;re the only owner, so leaving isn&apos;t available yet &mdash; promote
+                another member to owner first if you&apos;d rather hand off than delete
+                everything.
+              </p>
+            )}
+          </div>
         )}
       </section>
     </div>
