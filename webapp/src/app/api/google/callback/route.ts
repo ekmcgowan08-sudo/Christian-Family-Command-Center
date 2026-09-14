@@ -14,6 +14,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL));
   }
 
+  // The most common reason this callback ever fires without a code:
+  // the person clicked "Deny" on Google's consent screen. Handle that
+  // before the state check so it gets its own clear message instead of
+  // being lumped in with "state mismatch" -- which is a different,
+  // security-relevant failure, not just someone changing their mind.
+  if (req.nextUrl.searchParams.get("error")) {
+    dashboardUrl.searchParams.set("error", "google_access_denied");
+    const res = NextResponse.redirect(dashboardUrl);
+    res.cookies.delete(STATE_COOKIE);
+    return res;
+  }
+
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
   const expectedState = req.cookies.get(STATE_COOKIE)?.value;

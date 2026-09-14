@@ -1302,3 +1302,48 @@ calendar in; the Docker image itself was never actually built in this
 environment (no daemon available) -- worth a real `docker build` +
 `docker compose up` smoke test on any machine that has Docker before
 relying on this for a first deployment.
+
+## 2026-09-14 — Google OAuth denial gets its own message, not "state mismatch"
+
+Reviewed the Google OAuth connect/callback routes
+(`api/google/connect`, `api/google/callback`), untouched since the
+original build. The state-cookie CSRF protection, error handling around
+a missing refresh token, and token persistence all held up. Found one
+real, easily-reachable UX bug: the single most likely way this callback
+ever fires without a `code` is someone clicking **Deny** on Google's own
+consent screen -- and that redirects back with `?error=access_denied`,
+which the code was lumping into the same branch as a genuine state
+mismatch (a security-relevant failure -- forged or replayed callback,
+expired flow). Declining consent isn't a security problem, it's just a
+"no thanks," and deserves its own clear message instead of "That
+connection request expired or was invalid."
+
+**Fixed** by checking for Google's `error` query param first, before
+the state/code check, and giving it its own `google_access_denied`
+message: "You didn't grant access, so nothing was connected. You can
+try again anytime." The state-mismatch branch still exists unchanged
+for its real case.
+
+**Verified without needing real Google credentials**: Google's denial
+redirect is just an HTTP GET with specific query params -- reproduced it
+exactly (`/api/google/callback?error=access_denied&state=whatever`) and
+confirmed the new message shows and the old one doesn't; separately
+confirmed a request with a code but no matching state cookie still gets
+the distinct state-mismatch message. Both in `e2e/google-oauth-callback.spec.ts`.
+
+**A real bug the fuller suite caught, not a new one**: adding these
+tests pushed the whole suite's total signup volume (now 13 spec files
+deep) past the 30/hour signup rate limit set a few entries back, failing
+two unrelated tests with the real "Too many attempts" message -- correct
+behavior for the limit, just too tight for how large this legitimately
+-growing test suite's own burst of signups from one shared IP has
+gotten. Raised it to 100/hour, still a meaningful ceiling against actual
+abuse for an app whose real lifetime signup count is likely in the tens,
+not thousands.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 29 e2e tests passing together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in.

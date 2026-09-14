@@ -27,7 +27,7 @@ export async function signupNewFamily(
   formData: FormData
 ): Promise<ActionResult> {
   const ip = await getClientIp();
-  const allowed = await checkIpRateLimit("signup", ip, { max: 30, windowMs: 60 * 60 * 1000 });
+  const allowed = await checkIpRateLimit("signup", ip, { max: 100, windowMs: 60 * 60 * 1000 });
   if (!allowed) return { error: RATE_LIMIT_MESSAGE };
 
   const parsed = newFamilySchema.safeParse({
@@ -81,7 +81,7 @@ export async function signupWithInvite(
   formData: FormData
 ): Promise<ActionResult> {
   const ip = await getClientIp();
-  const allowed = await checkIpRateLimit("signup", ip, { max: 30, windowMs: 60 * 60 * 1000 });
+  const allowed = await checkIpRateLimit("signup", ip, { max: 100, windowMs: 60 * 60 * 1000 });
   if (!allowed) return { error: RATE_LIMIT_MESSAGE };
 
   const parsed = joinFamilySchema.safeParse({

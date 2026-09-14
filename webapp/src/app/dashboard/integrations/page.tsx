@@ -7,6 +7,8 @@ import { fetchRecentGmail } from "@/lib/google/calendar";
 const ERROR_MESSAGES: Record<string, string> = {
   google_not_configured:
     "Google sign-in isn't set up for this app yet. An administrator needs to add Google OAuth credentials (see docs/GOOGLE_SETUP.md).",
+  google_access_denied:
+    "You didn't grant access, so nothing was connected. You can try again anytime.",
   google_state_mismatch: "That connection request expired or was invalid. Please try again.",
   google_missing_refresh_token:
     "Google didn't grant lasting access this time. Please try connecting again.",
