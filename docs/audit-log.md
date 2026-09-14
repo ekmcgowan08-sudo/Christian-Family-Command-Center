@@ -1246,3 +1246,59 @@ deployment needs the user's choice of host; only Google syncs a
 calendar in; the feed has no date-range bound (it returns every event
 ever, including from years past) -- fine at this app's scale, worth
 revisiting only if a family's calendar grows very large.
+
+## 2026-09-14 — Docker healthcheck, and a real startup-race fix in docker-compose.yml
+
+Reviewed the deployment files (`Dockerfile`, `docker-compose.yml`),
+untouched since the original build. Found two real gaps, not just
+missing nice-to-haves:
+
+1. **No way to tell "the container is running" from "the app can
+   actually serve requests."** A Node process can be listening on its
+   port while its only real dependency, Postgres, is unreachable --
+   nothing would flag that as unhealthy. Added `src/app/api/health`
+   (unauthenticated, like the `.ics` feed) that runs a real
+   `SELECT 1` against the database and returns 200/`{status:"ok"}` or
+   503/`{status:"error"}`, and a `HEALTHCHECK` in the Dockerfile that
+   polls it every 30s. Used Node's own `http` client for the probe
+   rather than curl or wget, since neither is installed on the
+   `node:22-slim` base image and adding one just for this isn't worth it.
+
+2. **A genuine startup race in `docker-compose.yml`**: `app` declared
+   `depends_on: - db` (the short form), which only waits for the `db`
+   *container* to start, not for Postgres inside it to actually be
+   ready to accept connections -- those aren't the same moment. On a
+   fresh `docker compose up --build`, the app's `npx prisma migrate
+   deploy` startup step could run before Postgres finished
+   initializing and fail, an easy first-run trap for anyone self-hosting
+   this. Fixed by adding a `pg_isready`-based healthcheck to the `db`
+   service and switching `app` to `depends_on: db: condition:
+   service_healthy`, so it genuinely waits.
+
+**Verified what's actually verifiable here**: no Docker daemon is
+available in this sandbox, so the image itself couldn't be built or run
+directly. What *could* be checked, and was: `docker compose config`
+confirms `docker-compose.yml` is syntactically valid and the
+`depends_on`/healthcheck config resolves exactly as intended; the health
+endpoint and the literal Node one-liner used in the Dockerfile's
+`HEALTHCHECK` were both run against a live dev server for the healthy
+case (Postgres up → 200/`ok`, exit code 0) and the unhealthy case
+(Postgres deliberately stopped → 503/`error`, exit code 1) -- the actual
+failure mode this exists to catch, not just the happy path.
+
+**Added `e2e/health.spec.ts`** for the healthy path specifically (the
+one case the shared e2e suite can safely exercise, since every other
+test in it depends on that same Postgres instance staying up --
+deliberately not simulating an outage mid-suite). The unhealthy path is
+covered by the manual verification above instead, noted honestly in the
+test file's own comment rather than claimed as automated.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 27 e2e tests passing together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; the Docker image itself was never actually built in this
+environment (no daemon available) -- worth a real `docker build` +
+`docker compose up` smoke test on any machine that has Docker before
+relying on this for a first deployment.

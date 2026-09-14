@@ -10,12 +10,22 @@ services:
       - db-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U family -d family_command_center"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   app:
     build: .
     restart: unless-stopped
     depends_on:
-      - db
+      db:
+        # Not just "db's container has started" -- Postgres itself can
+        # still be mid-initialization at that point, which would make
+        # this container's `prisma migrate deploy` startup step race it
+        # and fail on a fresh `docker compose up`.
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://family:family@db:5432/family_command_center
       AUTH_SECRET: ${AUTH_SECRET}

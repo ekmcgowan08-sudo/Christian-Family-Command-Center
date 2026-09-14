@@ -129,6 +129,15 @@ host. Three straightforward options:
   entry in Google Cloud Console) to your real domain — it must exactly
   match `https://your-domain.com/api/google/callback`.
 
+The Docker image includes a `HEALTHCHECK` that polls `/api/health`,
+which checks real database connectivity rather than just "the process
+is listening" — useful for `docker ps`, Compose's own health-gated
+restarts, and most container orchestrators/uptime monitors if you point
+one at it. `docker-compose.yml`'s Postgres service also has its own
+healthcheck, and the app only starts once Postgres reports ready —
+without that, a fresh `docker compose up` can have the app's startup
+migration race Postgres's own initialization and fail.
+
 Every response also carries baseline security headers (`X-Frame-Options`,
 `X-Content-Type-Options`, `Referrer-Policy`, a restrictive
 `Permissions-Policy`, and `Strict-Transport-Security`) set in
