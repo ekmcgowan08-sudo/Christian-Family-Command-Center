@@ -1193,3 +1193,56 @@ calendar in. Account/family lifecycle is now reasonably complete:
 join, invite, promote/demote, leave (solo or with a co-owner), and
 delete are all covered, self-service, and re-verify roles fresh from
 the database rather than trusting a cached session.
+
+## 2026-09-14 — Fixed a real RFC 5545 bug in multi-day all-day events
+
+Reviewed the `.ics` phone-calendar feed (`lib/ics.ts`), which hadn't
+been touched since the original build and had no test coverage at all.
+Found a genuine correctness bug, not a hypothetical one: iCalendar's
+`DTEND` for an all-day (`VALUE=DATE`) event is *exclusive* -- it must be
+the day *after* the last day the event actually occupies. This app's
+feed builder passed an event's `endAt` date straight through with no
+adjustment, so a multi-day all-day event (say, a 3-day trip picked as
+July 10 to July 12 in the add/edit form, which doesn't hide or adjust
+the end-date field just because "All-day event" is checked) would export
+with `DTEND;VALUE=DATE:20300712` -- which per the spec means the event
+only spans July 10-11, silently dropping the last day the moment someone
+subscribed on their phone.
+
+Confirmed this against the actual `ics` library's real output (not
+assumed): a same-day all-day event already came out correct, because the
+library has its own special case that omits `DTEND` entirely when start
+and end are equal, which defaults to a one-day duration -- that's why
+this bug was invisible for the common single-day case and only bit
+multi-day ones.
+
+**Fixed** by adding one UTC day to the end date specifically for
+all-day events before handing it to the library (`addUtcDays` in
+`lib/ics.ts`). A same-day event still comes out correct -- DTEND becomes
+start+1, which the library now emits explicitly instead of omitting, an
+equally valid RFC 5545 encoding of the same one-day duration. Timed
+(non-all-day) events are untouched.
+
+**Verified against the library's real output**, not just the app's
+logic in isolation: ran `createEvents` directly in a throwaway script
+for a same-day case, an unadjusted multi-day case (reproducing the bug
+exactly, confirming the exclusion actually truncates the range), and an
+adjusted multi-day case, before touching any code.
+
+**Added `e2e/ics-feed.spec.ts`**, this feed's first test coverage: signs
+up a family, creates a single-day all-day event, a multi-day all-day
+event, and an ordinary timed event directly in Postgres, then fetches
+the real feed URL over HTTP and asserts on the literal `DTSTART`/`DTEND`
+lines in the returned `.ics` text -- not just that the response is
+200. Separately confirmed an unknown token 404s and that a family with
+zero events still gets back a valid, parseable empty `VCALENDAR` rather
+than an error.
+
+**Verified overall**: full clean-room rehearsal (lint, typegen, tsc,
+build) and all 26 e2e tests passing together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; the feed has no date-range bound (it returns every event
+ever, including from years past) -- fine at this app's scale, worth
+revisiting only if a family's calendar grows very large.
