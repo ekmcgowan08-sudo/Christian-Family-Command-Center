@@ -146,6 +146,11 @@ platform that already terminates TLS, put a reverse proxy (nginx, Caddy,
 Traefik) in front for HTTPS — the same proxy also makes the IP-based
 half of rate limiting work, see below.
 
+If you're self-hosting Postgres yourself (the Docker Compose path)
+rather than using a managed provider's own backups, see
+[`docs/BACKUP.md`](docs/BACKUP.md) for how to back it up and restore it
+— nothing does this automatically on its own.
+
 ## Testing
 
 A committed Playwright suite (`e2e/`) covers the golden paths end-to-end

@@ -1384,3 +1384,35 @@ accuracy against what the app actually does today.
 **Still open:** Google OAuth needs the user's own Cloud project;
 deployment needs the user's choice of host; only Google syncs a
 calendar in.
+
+## 2026-09-15 — Backup and restore guidance
+
+A real, previously-undocumented gap for anyone self-hosting: everything
+this app knows lives in one Postgres database, and nothing was backing
+it up. Losing that database (a bad `docker compose down -v`, a failed
+disk, a botched migration) would mean losing a family's entire calendar
+history with no way back.
+
+Added `docs/BACKUP.md`: a plain `pg_dump`/`psql` restore workflow for
+the self-hosted Docker Compose path (managed Postgres providers --
+Vercel, Railway, Render, Neon -- already back up their own instances,
+so it points there first for anyone on one of those), plus a cron
+example for automating it and a reminder to store backups somewhere
+other than the machine being backed up. Linked from the README's
+deployment section.
+
+**Verified the actual mechanism, not just the prose**: ran the real
+`pg_dump` against this sandbox's dev database, restored it into a fresh
+scratch database via the exact drop/create/restore sequence documented,
+and confirmed all 9 tables and matching row counts came back identical
+before dropping the scratch database. Couldn't exercise the literal
+`docker compose exec` wrapper commands (no Docker daemon in this
+sandbox, same limitation as the Dockerfile healthcheck entry), but the
+underlying `pg_dump`/`psql` commands the doc is built on are the same
+regardless of whether they're run directly or through `docker compose
+exec` — just verified in the environment.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; the Docker image and compose stack still haven't been
+run end-to-end on a machine with an actual Docker daemon.
