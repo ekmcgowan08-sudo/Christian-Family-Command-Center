@@ -1347,3 +1347,40 @@ build) and all 29 e2e tests passing together.
 **Still open:** Google OAuth needs the user's own Cloud project;
 deployment needs the user's choice of host; only Google syncs a
 calendar in.
+
+## 2026-09-15 — Caught up the setup docs with the features built since they were written
+
+`docs/EMAIL_SETUP.md` and `docs/GOOGLE_SETUP.md` hadn't been touched
+since the original build, so they'd drifted from what the app actually
+does now:
+
+- `EMAIL_SETUP.md` still said email powered "two things" (invites,
+  password reset) -- email verification, a whole feature added several
+  entries back, was missing entirely. Added it, and a short note that
+  all three are rate-limited per email/IP, so a family testing the app
+  by repeatedly triggering signups or resets in a burst understands why
+  they might briefly see "Too many attempts" rather than assuming
+  something's broken.
+- `GOOGLE_SETUP.md` had no mention of what happens when a member's
+  Google access lapses later (revoked from their own Google Account, or
+  a Testing-mode token expiring) -- added a short section pointing at
+  the friendly reconnect message built a few entries back, instead of
+  leaving that entirely undocumented for whoever hits it.
+
+Also, while reviewing untouched areas of the app looking for real bugs:
+checked that every file listed on `/dashboard/resources` actually exists
+in `public/resources/` under the exact filename referenced (it does, all
+five) -- a mismatch there would have been a silent broken-download bug,
+worth ruling out explicitly rather than assuming. Also confirmed the
+resources page's static files being reachable without login is correct,
+not a gap: they're generic printable templates, identical for every
+family, not personal data, so there's nothing for a login wall to
+protect there.
+
+No code changed in this entry, so no new typecheck/lint/build/e2e run
+was needed -- verified by reading the updated docs back end-to-end for
+accuracy against what the app actually does today.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in.

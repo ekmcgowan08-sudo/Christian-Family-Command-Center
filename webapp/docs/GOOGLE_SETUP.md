@@ -85,3 +85,13 @@ This app requests **read-only** access to Calendar and Gmail:
 
 Each member's Google connection is private to them until they explicitly
 turn on "Share this calendar with the family" — see the main README.
+
+## If a member's sync suddenly stops working
+
+Google access can lapse for reasons outside this app's control — the
+member revoked it from their own Google Account settings, or (in
+"Testing" mode) a token simply expired. The app doesn't crash when this
+happens: "Sync now" and turning on calendar sharing will instead show a
+clear message on the **Connected accounts** page saying access needs to
+be reconnected. Disconnecting and reconnecting Google from that same
+page fixes it.

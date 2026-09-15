@@ -1,16 +1,26 @@
 # Setting up outbound email
 
-Email powers two things in this app:
+Email powers three things in this app:
 
 - **Invite emails** — if you enter an email address when inviting a family
   member, they get a real email with a link instead of you having to
   copy-paste it to them yourself.
 - **Password reset** — "Forgot your password?" on the login page.
+- **Email verification** — a one-time confirmation link sent right after
+  signup, plus a "Resend" button in Settings. It's a soft reminder, not a
+  login gate: an unverified member can still use the app fully.
 
-Both work fine without email configured: invites just show you a link to
-copy-paste, and password reset shows a message explaining it isn't set up
-yet (an owner can remove and re-invite someone who's locked out in the
-meantime).
+All three work fine without email configured: invites just show you a
+link to copy-paste, password reset shows a message explaining it isn't
+set up yet (an owner can remove and re-invite someone who's locked out
+in the meantime), and the verification reminder simply never appears.
+
+Each of these is also rate-limited per email address and per source IP
+(see the `RateLimitHit` note in the main README) to stop one address or
+one source from being spammed with repeated requests — if you're
+testing signup, invites, or password reset repeatedly in a short burst
+yourself, you may occasionally see a "Too many attempts" message; it
+clears on its own within the hour.
 
 This app speaks plain SMTP, so any provider works. Two easy options:
 
@@ -55,6 +65,6 @@ Postmark, SendGrid, Amazon SES, Mailgun, or your own mail server all work
 the same way — set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
 and `SMTP_FROM` to whatever that provider's SMTP docs give you.
 
-Restart the app after editing `.env`. Invite emails and password reset
-will start working automatically once `SMTP_HOST`, `SMTP_USER`, and
-`SMTP_PASSWORD` are all set.
+Restart the app after editing `.env`. Invite emails, password reset, and
+email verification will all start working automatically once
+`SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD` are all set.
