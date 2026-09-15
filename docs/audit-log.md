@@ -1416,3 +1416,37 @@ exec` — just verified in the environment.
 deployment needs the user's choice of host; only Google syncs a
 calendar in; the Docker image and compose stack still haven't been
 run end-to-end on a machine with an actual Docker daemon.
+
+## 2026-09-15 — Attempted a real Docker build; confirmed why it can't run here
+
+Several earlier entries noted the Docker image and compose stack had
+never actually been built or run in this sandbox, only config-validated
+(`docker compose config`) and reasoned about. Went back and actually
+tried it, rather than continuing to note it as an open item without
+checking.
+
+The Docker daemon itself starts here fine (`dockerd`, root, no
+container-in-container blockers) -- that part of the earlier assumption
+("no daemon available") wasn't quite right. What actually blocks a real
+build is this sandbox's outbound network policy: pulling the
+`node:22-slim` base image hits Docker Hub's CDN
+(`production.cloudfront.docker.com`), which the environment's proxy
+explicitly rejects with a 403 policy denial (confirmed via the proxy's
+own status endpoint, not just an ambiguous failure). That's a
+sandbox-specific restriction, not a flaw in the `Dockerfile` or
+`docker-compose.yml` -- neither is reachable to test further without
+registry access this environment doesn't grant, and trying to route
+around a network policy that's clearly intentional isn't something to
+attempt.
+
+No code changed here. Recorded so the "still open" note in prior entries
+reflects what was actually verified (the daemon runs; the registry pull
+is blocked by policy) rather than a vaguer "no daemon available."
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; the Docker image and compose stack still need a real
+`docker build` + `docker compose up` on a machine with normal internet
+access before a first deployment -- everything about them has been
+validated as far as this sandbox's network policy allows, but not that
+final step.
