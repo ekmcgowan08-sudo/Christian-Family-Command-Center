@@ -87,6 +87,10 @@ test.describe("the .ics calendar feed", () => {
     });
     const family = await prisma.family.findFirstOrThrow({ where: { name: "The Emptycals" } });
 
+    // Signup must generate a real nanoid(24) token itself rather than
+    // falling through to the schema's much lower-entropy cuid() default.
+    expect(family.icsToken).toHaveLength(24);
+
     const emptyRes = await request.get(`${BASE_URL}/api/feed/${family.icsToken}.ics`);
     expect(emptyRes.status()).toBe(200);
     const emptyIcs = await emptyRes.text();

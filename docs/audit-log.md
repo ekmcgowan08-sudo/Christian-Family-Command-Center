@@ -1494,3 +1494,55 @@ deployment needs the user's choice of host; only Google syncs a
 calendar in; the Docker image and compose stack still need a real
 `docker build` + `docker compose up` on a machine with normal internet
 access.
+
+## 2026-09-16 — session.user.* staleness audit, and a weak default ICS token
+
+Followed up on the role-staleness bug fixed earlier this session by
+auditing every other `session.user.*` field read anywhere in the app
+(`session.user.email`, `.name`, `.familyId`, `.familyName`) for the same
+class of bug -- the JWT session only reflects data as of last login, so
+anything mutable read straight from it instead of the database can grant
+stale authorization or show stale data.
+
+**Conclusion: no other instance of the bug.** `role` was uniquely
+affected because it's the only one of these fields with an UPDATE path
+after account creation (`changeMemberRole`), which is exactly why it was
+a real privilege-staleness gap. Checked concretely, not assumed: grepped
+the whole app for any code path that updates a `User.name`, `User.email`,
+or `Family.name` after creation, and found none exist -- there's no
+"change my name," "change my email," or "rename the family" feature
+anywhere in the app. `session.user.name`/`.email`/`.familyId`/
+`.familyName` are therefore set once at signup/invite-accept and never
+change in the database afterward, so reading them from the JWT (as
+`dashboard/page.tsx`'s greeting, `dashboard/layout.tsx`'s header, and
+`createInvite`'s "invited by" email all do) cannot go stale. No code
+changes needed here.
+
+**A real, separate finding surfaced while re-reading the settings/ICS
+code this pass**: `Family.icsToken` -- the secret path segment for the
+unauthenticated `.ics` calendar feed, documented in the schema and
+README as "a long, unguessable secret" -- was only actually generated
+that way when an owner explicitly regenerated it
+(`regenerateIcsToken`, which uses `nanoid(24)`). The *initial* token,
+created at signup, was never set explicitly in `signupNewFamily` and so
+silently fell through to the Prisma schema's `@default(cuid())`. A
+cuid's structure is `timestamp + counter + host-fingerprint + ~8
+base36-random chars` -- roughly 41 bits of true randomness, made weaker
+in practice by the non-random portion being derived from public/guessable
+inputs (signup time, a monotonic counter, a per-process fingerprint) --
+far short of `nanoid(24)`'s ~142 bits of real entropy. Since almost no
+family will ever think to regenerate a link they never had reason to
+suspect was weak, essentially every family's calendar feed was
+protected by the weaker token for its whole lifetime.
+
+**Fix**: `signupNewFamily` (`src/lib/actions/auth.ts`) now generates the
+same `nanoid(24)` explicitly at family creation, matching
+`regenerateIcsToken`. Only one code path creates a `Family` in the app
+(confirmed by grep), so this closes the gap everywhere it existed.
+
+**Verified**: typecheck, lint, and build all clean. Added an assertion
+to `e2e/ics-feed.spec.ts` (`expect(family.icsToken).toHaveLength(24)`)
+that fails without the fix (a `cuid()` default is 25 characters, not
+24) and passes with it. Ran the full 30-test e2e suite together --
+all passing, including the ICS feed and rate-limit specs specifically
+re-run first in isolation.

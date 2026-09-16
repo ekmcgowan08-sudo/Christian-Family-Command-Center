@@ -48,9 +48,17 @@ export async function signupNewFamily(
 
   const passwordHash = await bcrypt.hash(password, 12);
 
+  // Explicit nanoid rather than the schema's cuid() default: a cuid's
+  // "random" portion is a handful of base36 characters padded out with a
+  // guessable timestamp/counter/fingerprint, which falls well short of the
+  // "long, unguessable secret" this token is documented to be (see
+  // Family.icsToken and regenerateIcsToken, which already uses nanoid).
+  const { nanoid } = await import("nanoid");
+
   const family = await prisma.family.create({
     data: {
       name: familyName,
+      icsToken: nanoid(24),
       members: {
         create: {
           name,
