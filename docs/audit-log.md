@@ -1450,3 +1450,47 @@ calendar in; the Docker image and compose stack still need a real
 access before a first deployment -- everything about them has been
 validated as far as this sandbox's network policy allows, but not that
 final step.
+
+## 2026-09-16 — Rate limiting on the change-password form
+
+Reviewed `changePassword` (Settings) since it's the one place in the app
+that re-checks a password against a stored hash without any throttling
+-- every other place that does this (`login`) already had a rate limit
+from a few entries back. Same class of attack applies here: someone with
+a hijacked or shared session but not the real password could otherwise
+guess "current password" indefinitely and take the account over
+outright once they land it, since knowing the current password is the
+only thing stopping a live session from fully repossessing the account.
+
+Added the same `checkRateLimit` protection already used everywhere else
+in the app: 8 wrong attempts per 15 minutes, keyed by the authenticated
+user's own id (no IP needed -- the caller is already identified by their
+session).
+
+**A real bug in the new test, not the app, caught before it shipped**:
+the first version of `e2e/rate-limit.spec.ts`'s new case reused the
+`getByText(...).waitFor()` pattern from the existing login test, but
+that test navigates to a fresh page between attempts (masking the
+issue); this one resubmits the same form repeatedly, so the *identical*
+error text ("Current password is incorrect.") stays mounted between
+submissions -- `waitFor()` was resolving against the *previous*
+attempt's already-rendered element instead of waiting for the new one,
+so the loop silently raced ahead of the server and never actually
+observed the 9th, rate-limited response. Caught because the test failed
+with only 6 of 10 attempts logged server-side, which didn't add up.
+Fixed by waiting for this specific click's network response directly
+(`page.waitForResponse`) before reading the result, rather than waiting
+on text content that doesn't reliably change between attempts.
+
+**Verified**: re-ran the fixed test and watched the real sequence in the
+server log -- 8 attempts return "Current password is incorrect," the
+9th returns "Too many attempts," and the account's real password still
+works to log in afterward (confirming the block didn't silently corrupt
+anything). Full clean-room rehearsal and all 30 e2e tests passing
+together.
+
+**Still open:** Google OAuth needs the user's own Cloud project;
+deployment needs the user's choice of host; only Google syncs a
+calendar in; the Docker image and compose stack still need a real
+`docker build` + `docker compose up` on a machine with normal internet
+access.
