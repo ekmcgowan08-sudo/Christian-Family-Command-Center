@@ -95,4 +95,58 @@ test.describe("family invites and membership", () => {
     await expect(joinPage.getByText(/doesn't exist/i)).toBeVisible();
     await context.close();
   });
+
+  test("the atomic claim signupWithInvite relies on can't double-spend an invite under real concurrency", async () => {
+    // signupWithInvite reads the invite, then separately claims it with a
+    // conditional update (`updateMany` with `usedAt: null` in the WHERE
+    // clause) before creating the user -- that conditional update is the
+    // entire defense against two requests racing the same one-time code
+    // both passing the initial "is it used?" read before either commits.
+    //
+    // A full end-to-end version of this (two real browser sessions
+    // submitting the join form at once) was tried and dropped: whether it
+    // actually exercises concurrent database access depends on exact
+    // request scheduling through the dev server, which isn't reliable
+    // enough to trust as a regression test -- it passed even against the
+    // unfixed code in some runs. Firing the same conditional update Prisma
+    // issues, twice, concurrently, against a real Postgres row is a
+    // deterministic way to prove the mechanism itself holds under
+    // contention, independent of how any particular HTTP round trip
+    // happens to get scheduled.
+    const family = await prisma.family.create({
+      data: {
+        name: "Race Test Family",
+        icsToken: `race-test-${Date.now()}`,
+        members: {
+          create: {
+            name: "Race Test Owner",
+            email: uniqueEmail("race-test-owner"),
+            passwordHash: "not-a-real-hash",
+            role: "OWNER",
+          },
+        },
+      },
+      include: { members: true },
+    });
+    const invite = await prisma.invite.create({
+      data: {
+        familyId: family.id,
+        invitedByUserId: family.members[0].id,
+        role: "MEMBER",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+
+    const claim = () =>
+      prisma.invite.updateMany({
+        where: { id: invite.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+    const [first, second] = await Promise.all([claim(), claim()]);
+
+    const successfulClaims = [first.count, second.count].filter((count) => count === 1);
+    expect(successfulClaims).toHaveLength(1);
+
+    await prisma.family.delete({ where: { id: family.id } });
+  });
 });

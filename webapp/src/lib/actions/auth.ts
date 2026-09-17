@@ -118,23 +118,42 @@ export async function signupWithInvite(
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const [newUser] = await prisma.$transaction([
-    prisma.user.create({
-      data: {
-        familyId: invite.familyId,
-        name,
-        email,
-        passwordHash,
-        role: invite.role,
-      },
-    }),
-    prisma.invite.update({
-      where: { id: invite.id },
-      data: { usedAt: new Date() },
-    }),
-  ]);
+  // The usedAt check above isn't enough on its own to guarantee single use:
+  // two requests racing the same code could both read usedAt as null before
+  // either commits. Claim the invite with a conditional update instead --
+  // an UPDATE ... WHERE usedAt IS NULL only ever succeeds for one concurrent
+  // caller, so the loser sees claimed.count === 0 and backs out instead of
+  // also creating a user.
+  let newUserId: string;
+  try {
+    newUserId = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.invite.updateMany({
+        where: { id: invite.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new Error("INVITE_ALREADY_CLAIMED");
+      }
 
-  await sendVerificationForUser(newUser.id);
+      const user = await tx.user.create({
+        data: {
+          familyId: invite.familyId,
+          name,
+          email,
+          passwordHash,
+          role: invite.role,
+        },
+      });
+      return user.id;
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "INVITE_ALREADY_CLAIMED") {
+      return { error: "That invite has already been used." };
+    }
+    throw err;
+  }
+
+  await sendVerificationForUser(newUserId);
   await doSignIn(email, password);
   return { success: true };
 }
