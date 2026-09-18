@@ -209,4 +209,35 @@ test.describe("family invites and membership", () => {
 
     await prisma.family.delete({ where: { id: family.id } });
   });
+
+  test("two concurrent deleteFamily calls on the same family don't crash the loser", async () => {
+    // Family cascades to User on delete, so two owners confirming
+    // deletion at close to the same instant race each other: whichever
+    // DELETE commits first wins, and the second one hits a row that's
+    // already gone. deleteFamily catches exactly this (Prisma error code
+    // P2025, "record to delete does not exist") and treats it as
+    // success rather than letting it crash out unhandled -- this proves
+    // the race actually produces that specific, catchable error rather
+    // than something else.
+    const family = await prisma.family.create({
+      data: {
+        name: "Delete Race Test Family",
+        icsToken: `delete-race-test-${Date.now()}`,
+      },
+    });
+
+    const deleteAttempt = () => prisma.family.delete({ where: { id: family.id } });
+    const results = await Promise.allSettled([deleteAttempt(), deleteAttempt()]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter(
+      (r): r is PromiseRejectedResult => r.status === "rejected"
+    );
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toMatchObject({ code: "P2025" });
+
+    const stillExists = await prisma.family.findUnique({ where: { id: family.id } });
+    expect(stillExists).toBeNull();
+  });
 });

@@ -193,6 +193,16 @@ export async function leaveFamily() {
  * to confirm, the same friction real apps use before a destructive,
  * unrecoverable action that affects more than just the person clicking
  * the button.
+ *
+ * Family cascades to User on delete, so two owners confirming deletion
+ * at close to the same instant race each other in a way that's easy to
+ * miss: the loser's own row can vanish out from under it mid-request
+ * (requireOwner would then just deny them, a graceful outcome already
+ * handled below) or, later, its own `family.delete` call can hit a row
+ * the winner already removed. Both P2025 ("record to delete does not
+ * exist") cases below mean the same thing -- someone else already
+ * finished deleting this family -- so they're treated as success
+ * rather than left to crash out to Next's generic error page.
  */
 export async function deleteFamily(
   _prevState: ActionResult | null,
@@ -205,9 +215,18 @@ export async function deleteFamily(
     return { error: err instanceof Error ? err.message : "Not authorized." };
   }
 
-  const family = await prisma.family.findUniqueOrThrow({
-    where: { id: session.user.familyId },
-  });
+  let family;
+  try {
+    family = await prisma.family.findUniqueOrThrow({
+      where: { id: session.user.familyId },
+    });
+  } catch (err) {
+    if (isRecordNotFoundError(err)) {
+      await signOut({ redirectTo: "/" });
+      return { success: true };
+    }
+    throw err;
+  }
 
   const confirmName = formData.get("confirmName");
   if (typeof confirmName !== "string" || confirmName !== family.name) {
@@ -216,8 +235,16 @@ export async function deleteFamily(
 
   // Family -> User/CalendarEvent/Invite, and User -> GoogleAccount/tokens,
   // all cascade in the schema -- one delete cleans up everything.
-  await prisma.family.delete({ where: { id: family.id } });
+  try {
+    await prisma.family.delete({ where: { id: family.id } });
+  } catch (err) {
+    if (!isRecordNotFoundError(err)) throw err;
+  }
 
   await signOut({ redirectTo: "/" });
   return { success: true };
+}
+
+function isRecordNotFoundError(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025";
 }

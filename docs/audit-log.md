@@ -1649,3 +1649,53 @@ suite passes, including all three family-related spec files together
 `family-lifecycle.spec.ts` and `family-roles.spec.ts` still pass
 unchanged, confirming the added row lock doesn't affect the ordinary,
 non-racing case).
+
+## 2026-09-18 — Swept the rest of src/lib/actions/*.ts for the same race class, fixed one more
+
+Systematically checked every remaining multi-step "read, decide, then
+write" action for the check-then-act race pattern found twice already
+this session (invite claiming, owner-count checks), rather than assume
+the sweep was done after two fixes. Results, being specific about what
+was and wasn't actually a bug rather than treating "has the same shape"
+as automatically worth fixing:
+
+- **`calendar.ts`, `google.ts`, the Google OAuth callback**: no race.
+  Calendar actions use conditional `updateMany`/`deleteMany` with a
+  `count === 0` check already, not read-then-write; Google actions are
+  scoped to the caller's own `userId` only, so there's no other party
+  to race against; the OAuth callback's `googleAccount.upsert` is a
+  single atomic statement.
+- **`email-verification.ts`'s `verifyEmail`**: has the same read-then-
+  write shape (reads `usedAt`, writes it in a later `$transaction`),
+  but a race there is harmless -- both concurrent calls would just set
+  `emailVerifiedAt` to the same true value. No fix; the shape alone
+  isn't the bug, a reachable bad outcome is.
+- **`password-reset.ts`'s `resetPassword`**: same shape again, and this
+  one genuinely could let two near-simultaneous requests both set a
+  password from one token instead of one. Deliberately not fixed:
+  unlike the invite race (which let an attacker gain an extra family
+  seat they shouldn't have) or the owner race (which could brick the
+  family's admin capability entirely), racing this token doesn't grant
+  anyone anything they don't already get for free -- whoever holds a
+  password-reset link can already just use it before the legitimate
+  owner does, race or not, since it's a bearer credential with no
+  second factor. Fixing the shape here would be pattern-matching, not
+  closing a real gap. Documented rather than silently skipped, per the
+  brief to say plainly what was and wasn't actually a bug.
+- **`family.ts`'s `deleteFamily`**: genuine bug, fixed. `Family`
+  cascades to `User` on delete, so two owners confirming deletion at
+  close to the same instant race each other -- the loser's
+  `prisma.family.delete()` call hits a row the winner already removed
+  and throws an uncaught Prisma P2025 ("record to delete does not
+  exist"), crashing out to Next's generic error page instead of the
+  friendly confirmation both callers were expecting (the family *is*
+  gone either way -- that part isn't broken, only the second caller's
+  experience of it). Fixed by catching P2025 at both the initial
+  `findUniqueOrThrow` and the final `family.delete` and treating it as
+  the success it actually is, rather than as a real client caller error.
+
+**Verified**: typecheck, lint, and build all clean. Added a
+deterministic test (two concurrent `prisma.family.delete()` calls on
+the same row) confirming the race genuinely produces P2025 specifically
+-- the exact code the fix checks for -- run 5 times to confirm it
+isn't flaky (5/5 passed). Full 33-test e2e suite passes together.
