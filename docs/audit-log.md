@@ -1595,3 +1595,57 @@ fix and passes reliably (5/5 repeated runs) with it.
 suite passes together (30 existing + the new atomic-claim test); the
 two existing sequential invite tests (join, and reuse-after-revoke)
 still pass unchanged.
+
+## 2026-09-18 — Two owners could race each other down to zero owners
+
+Follow-up from the invite-code race fixed above: the same check-then-act
+pattern existed in `leaveFamily` and `changeMemberRole`
+(`src/lib/actions/family.ts`), guarding the invariant "a family always
+has at least one owner." `leaveFamily` counted the family's *other*
+owners, then deleted the caller if that count was non-zero;
+`changeMemberRole` had no count check at all (it relied on the caller
+always still being an owner themselves, which is only true if nobody
+else concurrently demotes them).
+
+Concretely reachable: a family with exactly two owners, A and B. If A
+clicks "Leave family" and B clicks "Leave family" (or "Make member" on
+each other) at close to the same instant, each read sees the other as
+still an owner and passes its own check before either commits -- both
+succeed, and the family is left with zero owners. From that point
+nobody can invite, promote, remove, or delete the family; the only way
+out would be direct database access. Two people clicking within the
+same window is far more plausible for this pair of actions than for
+the invite race (no link-sharing required -- just two co-owners in
+their own settings pages at the same time), so this was worth treating
+as seriously as that one.
+
+**Fix**: added `lockFamilyOwnerIds(tx, familyId)`, a small helper that
+runs `SELECT id FROM "User" WHERE "familyId" = ... AND role = 'OWNER'
+FOR UPDATE` inside a transaction. Postgres holds a row lock on every
+owner row for the rest of that transaction; a concurrent call trying to
+lock the same rows blocks until the first commits, then re-reads
+current state rather than the stale pre-commit count. Both
+`leaveFamily` and `changeMemberRole` now do their "would this leave
+zero owners?" check under that lock, inside `prisma.$transaction`,
+before deleting/demoting. This also closes the same race between the
+two different functions (one owner leaving while another
+simultaneously demotes someone), not just within one function racing
+itself, since both lock the same rows.
+
+**Testing note**: same lesson as the invite-race fix -- a genuine
+two-browser-tab reproduction of this specific race wasn't attempted
+again given the earlier finding that HTTP-level timing through the dev
+server isn't reliable enough to trust as a regression test. Added a
+deterministic test instead (`e2e/family.spec.ts`) that creates a
+real two-owner family and fires the same conditional
+`SELECT ... FOR UPDATE` + update, twice, concurrently, directly against
+Postgres -- confirmed exactly one of the two demotions succeeds and the
+family always ends with exactly one owner. Ran it 5 times in a row to
+confirm it isn't itself flaky (5/5 passed).
+
+**Verified**: typecheck, lint, and build all clean. Full 32-test e2e
+suite passes, including all three family-related spec files together
+(the two normal sequential leave/delete/promote/demote UI flows in
+`family-lifecycle.spec.ts` and `family-roles.spec.ts` still pass
+unchanged, confirming the added row lock doesn't affect the ordinary,
+non-racing case).

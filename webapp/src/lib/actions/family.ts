@@ -2,11 +2,31 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isEmailConfigured, sendInviteEmail } from "@/lib/email";
 import { requireOwner } from "@/lib/require-owner";
 import type { ActionResult } from "@/lib/actions/auth";
+
+/**
+ * Locks every OWNER row in a family for the rest of the current
+ * transaction (SELECT ... FOR UPDATE), so a concurrent call doing the
+ * same "is there still another owner?" check can't also read the
+ * pre-change count -- it blocks until this transaction commits, then
+ * re-reads the now-current state. Without this, two owners leaving (or
+ * demoting each other) at the same instant could each see the other as
+ * "the other owner" and both proceed, leaving the family with none.
+ */
+async function lockFamilyOwnerIds(
+  tx: Prisma.TransactionClient,
+  familyId: string
+): Promise<string[]> {
+  const owners = await tx.$queryRaw<{ id: string }[]>`
+    SELECT id FROM "User" WHERE "familyId" = ${familyId} AND role = 'OWNER' FOR UPDATE
+  `;
+  return owners.map((o) => o.id);
+}
 
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email().optional().or(z.literal("")),
@@ -80,17 +100,32 @@ export async function revokeInvite(inviteId: string) {
 }
 
 /**
- * Promotes or demotes another member. Always leaves at least one owner
- * behind: the caller must already be an owner, and can't target their
- * own row, so the acting owner is never the one being demoted.
+ * Promotes or demotes another member. The caller must already be an
+ * owner and can't target their own row, but that alone doesn't rule out
+ * two owners demoting each other in the same instant -- each would see
+ * the other as still-an-owner and both demotions would go through,
+ * leaving zero. Demoting the family's last other owner is blocked by
+ * lockFamilyOwnerIds re-checking under a row lock, not by this
+ * function's own state.
  */
 export async function changeMemberRole(memberId: string, newRole: "OWNER" | "MEMBER") {
   const session = await requireOwner();
   if (memberId === session.user.id) throw new Error("You can't change your own role.");
 
-  await prisma.user.updateMany({
-    where: { id: memberId, familyId: session.user.familyId },
-    data: { role: newRole },
+  await prisma.$transaction(async (tx) => {
+    const owners = await lockFamilyOwnerIds(tx, session.user.familyId);
+
+    const target = await tx.user.findUnique({
+      where: { id: memberId },
+      select: { familyId: true, role: true },
+    });
+    if (!target || target.familyId !== session.user.familyId) return;
+
+    if (target.role === "OWNER" && newRole === "MEMBER" && owners.filter((id) => id !== memberId).length === 0) {
+      throw new Error("Can't demote the family's only owner -- promote someone else first.");
+    }
+
+    await tx.user.update({ where: { id: memberId }, data: { role: newRole } });
   });
   revalidatePath("/dashboard/family");
 }
@@ -114,33 +149,40 @@ export async function removeMember(memberId: string) {
  * Checks the member's role and the family's other owners fresh from the
  * database, not the (possibly stale) JWT session -- someone freshly
  * promoted to owner, or whose only co-owner just left, should be
- * stopped here even if their session hasn't caught up yet.
+ * stopped here even if their session hasn't caught up yet. The
+ * "other owners" count is read under lockFamilyOwnerIds's row lock, not
+ * a plain count: two owners leaving in the same instant could otherwise
+ * each see the other as "the other owner" and both succeed, leaving
+ * zero -- the exact race this function's own comment used to claim was
+ * already handled, before it actually was.
  */
 export async function leaveFamily() {
   const session = await auth();
   if (!session) throw new Error("Not signed in.");
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user) throw new Error("User not found.");
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: session.user.id } });
+    if (!user) throw new Error("User not found.");
 
-  if (user.role === "OWNER") {
-    const otherOwners = await prisma.user.count({
-      where: { familyId: user.familyId, role: "OWNER", id: { not: user.id } },
-    });
-    if (otherOwners === 0) {
-      throw new Error(
-        "You're the only owner, so you can't leave this way -- promote another member to owner first, or delete the family instead."
-      );
+    if (user.role === "OWNER") {
+      const owners = await lockFamilyOwnerIds(tx, user.familyId);
+      const otherOwners = owners.filter((id) => id !== user.id).length;
+      if (otherOwners === 0) {
+        throw new Error(
+          "You're the only owner, so you can't leave this way -- promote another member to owner first, or delete the family instead."
+        );
+      }
     }
-  }
 
-  // CalendarEvent.sourceUserId isn't a foreign key Prisma can cascade on,
-  // so this member's synced Google events need cleaning up explicitly --
-  // same as disconnecting Google or turning off calendar sharing.
-  await prisma.calendarEvent.deleteMany({
-    where: { source: "GOOGLE", sourceUserId: user.id },
+    // CalendarEvent.sourceUserId isn't a foreign key Prisma can cascade
+    // on, so this member's synced Google events need cleaning up
+    // explicitly -- same as disconnecting Google or turning off
+    // calendar sharing.
+    await tx.calendarEvent.deleteMany({
+      where: { source: "GOOGLE", sourceUserId: user.id },
+    });
+    await tx.user.delete({ where: { id: user.id } });
   });
-  await prisma.user.delete({ where: { id: user.id } });
 
   await signOut({ redirectTo: "/" });
 }
