@@ -1699,3 +1699,51 @@ deterministic test (two concurrent `prisma.family.delete()` calls on
 the same row) confirming the race genuinely produces P2025 specifically
 -- the exact code the fix checks for -- run 5 times to confirm it
 isn't flaky (5/5 passed). Full 33-test e2e suite passes together.
+
+## 2026-09-19 — The rate limiter itself could be blown through by a burst
+
+Continued the sweep into `src/lib/rate-limit.ts` (`checkRateLimit`),
+the function every brute-force defense added this session actually
+depends on (login, change-password, password-reset, resend-
+verification, signup). It had the same read-then-write shape as the
+bugs fixed above -- count existing hits, then separately insert a new
+one -- except here the failure mode is worse than in any of those,
+because a rate limiter's entire job is to survive exactly the traffic
+pattern this race is triggered by: a burst of near-simultaneous
+requests, not one slow guess at a time. A real attacker automating a
+brute-force naturally sends requests concurrently, not sequentially --
+this bug meant doing so would have let every request in a burst read
+the same pre-increment count and pass, before the persisted count could
+catch up.
+
+Deliberately measured this rather than assuming it was theoretical:
+temporarily stripped the fix down to prove it, firing 20 concurrent
+attempts at a `max: 5` limit. Without serialization, 9-10 of the 20 got
+through in every one of 3 runs -- roughly double the configured limit,
+not some negligible edge case. This means, concretely, every rate limit
+added or verified so far this session (login's 8-per-15-minutes,
+change-password's 8-per-15-minutes, etc.) was weaker in practice than
+its configured number under a real concurrent attack, even though each
+individually tested correctly against sequential requests.
+
+**Fix**: wrapped the count-then-insert in a transaction that first
+takes `pg_advisory_xact_lock(hashtext(key))` -- a Postgres session lock
+scoped to a hash of the rate-limit key itself, held for the rest of the
+transaction and released automatically on commit. Concurrent callers
+for the *same* key now queue up and see accurate, up-to-date counts one
+at a time; concurrent callers for *different* keys (unrelated accounts
+or IPs) never block each other, since the lock is scoped per-key, not
+global.
+
+**Verified**: typecheck, lint, and build all clean. Added a
+deterministic test (`e2e/rate-limit.spec.ts`) that fires 20 concurrent
+attempts at a `max: 5` limit against the real test database, using the
+same lock+count+insert Prisma issues (the real function can't be
+imported directly into the Playwright process without pointing it at
+the wrong database -- same constraint as the other deterministic tests
+this session). Confirmed it fails against the unfixed shape (9-10
+allowed instead of 5, 3/3 runs) and passes reliably fixed (5/5 runs,
+exactly 5 allowed and exactly 5 persisted every time). Full 34-test e2e
+suite passes together, including both real login and change-password
+rate-limit tests -- confirming the transaction wrapper doesn't change
+correct sequential behavior, only the concurrent case.

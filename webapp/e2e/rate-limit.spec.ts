@@ -1,7 +1,45 @@
 import { test, expect } from "@playwright/test";
-import { uniqueEmail, signupNewFamily, logout, login } from "./helpers";
+import { uniqueEmail, signupNewFamily, logout, login, prisma } from "./helpers";
 
 test.describe("rate limiting", () => {
+  test("a concurrent burst against one key can't exceed max, only a slow trickle can", async () => {
+    // checkRateLimit's count-then-insert only stays correct if concurrent
+    // callers for the same key are serialized -- otherwise a burst (the
+    // actual shape a real attack takes, as opposed to one guess every few
+    // hundred milliseconds) would let every request in the burst read the
+    // same pre-increment count and all pass, blowing straight through
+    // `max` before the persisted count catches up. This mirrors the real
+    // function's pg_advisory_xact_lock + count + insert exactly, against
+    // the real test database, since the real function can't be imported
+    // directly here without pulling in the dev database's connection
+    // (see the other deterministic concurrency tests this session for
+    // the same constraint).
+    const key = `rate-limit-race-test-${Date.now()}`;
+    const max = 5;
+    const windowStart = new Date(Date.now() - 60_000);
+
+    const attempt = () =>
+      prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+        await tx.rateLimitHit.deleteMany({ where: { key, createdAt: { lt: windowStart } } });
+        const count = await tx.rateLimitHit.count({ where: { key, createdAt: { gte: windowStart } } });
+        if (count >= max) return false;
+        await tx.rateLimitHit.create({ data: { key } });
+        return true;
+      });
+
+    // Far more concurrent attempts than `max` -- a naive count-then-insert
+    // would let most or all of these through at once.
+    const results = await Promise.all(Array.from({ length: 20 }, () => attempt()));
+    const allowedCount = results.filter(Boolean).length;
+    expect(allowedCount).toBe(max);
+
+    const persistedCount = await prisma.rateLimitHit.count({ where: { key } });
+    expect(persistedCount).toBe(max);
+
+    await prisma.rateLimitHit.deleteMany({ where: { key } });
+  });
+
   test("repeated failed logins against one account are eventually blocked", async ({ page }) => {
     const email = uniqueEmail("brute-force-target");
     const password = "supersecret123";

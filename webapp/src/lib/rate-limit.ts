@@ -16,27 +16,40 @@ export async function checkRateLimit(
 ): Promise<boolean> {
   const windowStart = new Date(Date.now() - opts.windowMs);
 
-  // Sweep this key's own expired hits every time -- cheap, and keeps a
-  // hot key's row count bounded to roughly `max` instead of growing
-  // forever. A small random chance of a global sweep bounds the table
-  // as a whole without needing a cron job for a low-traffic family app.
-  await prisma.rateLimitHit.deleteMany({
-    where: { key, createdAt: { lt: windowStart } },
-  });
   if (Math.random() < 0.01) {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     await prisma.rateLimitHit.deleteMany({ where: { createdAt: { lt: dayAgo } } });
   }
 
-  const count = await prisma.rateLimitHit.count({
-    where: { key, createdAt: { gte: windowStart } },
-  });
-  if (count >= opts.max) {
-    return false;
-  }
+  return prisma.$transaction(async (tx) => {
+    // Serialize concurrent callers for this exact key before counting --
+    // without this, a burst of concurrent requests for the same key
+    // (exactly the shape a real brute-force attempt takes, as opposed to
+    // one slow guess at a time) would all read the same pre-increment
+    // count and all pass, letting the burst blow straight through `max`
+    // before the persisted count catches up. pg_advisory_xact_lock is
+    // scoped to a hash of this key alone and auto-releases at the end of
+    // this transaction, so unrelated keys (other accounts/IPs) never
+    // block each other.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
 
-  await prisma.rateLimitHit.create({ data: { key } });
-  return true;
+    // Sweep this key's own expired hits every time -- cheap, and keeps a
+    // hot key's row count bounded to roughly `max` instead of growing
+    // forever.
+    await tx.rateLimitHit.deleteMany({
+      where: { key, createdAt: { lt: windowStart } },
+    });
+
+    const count = await tx.rateLimitHit.count({
+      where: { key, createdAt: { gte: windowStart } },
+    });
+    if (count >= opts.max) {
+      return false;
+    }
+
+    await tx.rateLimitHit.create({ data: { key } });
+    return true;
+  });
 }
 
 /**
