@@ -1747,3 +1747,54 @@ exactly 5 allowed and exactly 5 persisted every time). Full 34-test e2e
 suite passes together, including both real login and change-password
 rate-limit tests -- confirming the transaction wrapper doesn't change
 correct sequential behavior, only the concurrent case.
+
+## 2026-09-22 — Google Calendar sync never removed events deleted at the source
+
+Moved on to `src/lib/google/calendar.ts`'s `syncGoogleCalendarForUser`,
+which mirrors a member's shared Google Calendar into the family's
+`CalendarEvent` table. Read it end-to-end rather than assuming it was
+fine because it wasn't a check-then-act race like the last several
+fixes: the sync loop only ever *creates or updates* rows for events
+present in the freshly-fetched window -- nothing in the function ever
+deleted a `CalendarEvent` row. Concretely: delete an event in Google
+Calendar, and it stays on the family calendar forever. Same for an
+event rescheduled past the 90-day sync window, or (for sync modes that
+report deletions as a `status: "cancelled"` item rather than omitting
+them) an explicitly cancelled event -- the loop's own `continue` for
+cancelled items meant those were silently skipped rather than acted on
+at all. For a family relying on this to reflect what's actually on
+someone's calendar, a stale phantom event that never goes away is a
+real, ongoing correctness problem, not a cosmetic one.
+
+**Fix**: split the merge logic out into
+`mergeGoogleEventsIntoFamilyCalendar`, which now also prunes this
+member's previously-synced events whose `sourceEventId` didn't appear
+in the current fetch. Scoped to `endAt >= timeMin` specifically so a
+sync can never delete a *past* event -- `/dashboard/calendar`'s
+"Recently past" section is a standing archive of history, and pruning
+by "not in this sync's results" would otherwise wipe it out on every
+sync, since the sync window is forward-looking only and never
+re-fetches the past.
+
+**Testability**: `syncGoogleCalendarForUser` itself can't be exercised
+in this sandbox (no real Google OAuth credentials, as established
+earlier this session), so the merge/prune step was deliberately
+factored out as a separate function taking `db` as an injectable
+parameter (defaulting to the real Prisma client) -- this is a different
+approach from the deterministic-query tests used for the last several
+race fixes, and a better one where it's available: it lets a test call
+the *actual* production function, against the real test database, with
+a hand-built list of fake Google API items standing in for what
+`googleapis` would have returned, rather than duplicating the logic's
+shape in the test.
+
+**Verified**: typecheck, lint, and build all clean. Two new tests in
+`e2e/google-calendar-sync.spec.ts` cover (1) an event still present at
+the source gets updated in place, a brand-new one gets created, an
+event removed at the source gets pruned, and a past event absent from
+the fetch is left completely untouched, and (2) a `status: "cancelled"`
+item is pruned despite the merge loop skipping it. Confirmed both fail
+against the code with the prune step removed (exactly the two bugs
+being fixed) and pass with it restored. Full 36-test e2e suite passes
+together, including the existing Google-sync-failure test, confirming
+the refactor didn't change the error-handling path.

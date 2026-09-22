@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import type { GoogleAccount } from "@prisma/client";
+import type { GoogleAccount, PrismaClient } from "@prisma/client";
 import { getGoogleOAuthClient } from "./oauth";
 import { prisma } from "@/lib/prisma";
 
@@ -31,6 +31,98 @@ function getAuthorizedClient(account: GoogleAccount) {
   return client;
 }
 
+type GoogleEventSummary = {
+  id?: string | null;
+  status?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  location?: string | null;
+  start?: { date?: string | null; dateTime?: string | null } | null;
+  end?: { date?: string | null; dateTime?: string | null } | null;
+};
+
+/**
+ * Upserts the given Google Calendar items into the family's CalendarEvent
+ * table, then prunes this member's previously-synced events that are no
+ * longer present in the fetched window -- deleted, cancelled, or
+ * rescheduled out of range at the source, none of which show up in
+ * `items` on a plain (non-incremental) events.list call. Without this,
+ * a deleted Google event stayed on the family calendar forever, since
+ * the sync only ever created/updated, never removed.
+ *
+ * The prune is scoped to `endAt >= timeMin` so past events are never
+ * touched -- the calendar page's "Recently past" section is meant to be
+ * a standing archive, not something a sync should be able to wipe out.
+ *
+ * Split out from syncGoogleCalendarForUser, and takes `db` as a
+ * parameter (defaulting to the real client), so this merge/prune logic
+ * can be exercised directly against a real database in tests without
+ * needing a live Google API call.
+ */
+export async function mergeGoogleEventsIntoFamilyCalendar(
+  opts: { familyId: string; userId: string; timeMin: Date; items: GoogleEventSummary[] },
+  db: Pick<PrismaClient, "calendarEvent"> = prisma
+): Promise<{ synced: number }> {
+  const { familyId, userId, timeMin, items } = opts;
+  let synced = 0;
+  const syncedEventIds: string[] = [];
+
+  for (const item of items) {
+    if (!item.id || !item.status || item.status === "cancelled") continue;
+
+    const start = item.start?.dateTime ?? item.start?.date;
+    const end = item.end?.dateTime ?? item.end?.date;
+    if (!start || !end) continue;
+
+    const allDay = Boolean(item.start?.date && !item.start?.dateTime);
+
+    await db.calendarEvent.upsert({
+      where: {
+        familyId_source_sourceUserId_sourceEventId: {
+          familyId,
+          source: "GOOGLE",
+          sourceUserId: userId,
+          sourceEventId: item.id,
+        },
+      },
+      create: {
+        familyId,
+        title: item.summary || "(untitled event)",
+        description: item.description ?? undefined,
+        location: item.location ?? undefined,
+        startAt: new Date(start),
+        endAt: new Date(end),
+        allDay,
+        source: "GOOGLE",
+        sourceUserId: userId,
+        sourceEventId: item.id,
+      },
+      update: {
+        title: item.summary || "(untitled event)",
+        description: item.description ?? undefined,
+        location: item.location ?? undefined,
+        startAt: new Date(start),
+        endAt: new Date(end),
+        allDay,
+      },
+    });
+    syncedEventIds.push(item.id);
+    synced += 1;
+  }
+
+  await db.calendarEvent.deleteMany({
+    where: {
+      familyId,
+      source: "GOOGLE",
+      sourceUserId: userId,
+      endAt: { gte: timeMin },
+      sourceEventId: { notIn: syncedEventIds },
+    },
+  });
+
+  return { synced };
+}
+
 /**
  * Pulls upcoming events from this member's connected Google Calendar and
  * mirrors them into the family's CalendarEvent table (source = GOOGLE).
@@ -59,57 +151,19 @@ export async function syncGoogleCalendarForUser(userId: string) {
     maxResults: 250,
   });
 
-  const items = res.data.items ?? [];
-  let synced = 0;
-
-  for (const item of items) {
-    if (!item.id || !item.status || item.status === "cancelled") continue;
-
-    const start = item.start?.dateTime ?? item.start?.date;
-    const end = item.end?.dateTime ?? item.end?.date;
-    if (!start || !end) continue;
-
-    const allDay = Boolean(item.start?.date && !item.start?.dateTime);
-
-    await prisma.calendarEvent.upsert({
-      where: {
-        familyId_source_sourceUserId_sourceEventId: {
-          familyId: account.user.familyId,
-          source: "GOOGLE",
-          sourceUserId: userId,
-          sourceEventId: item.id,
-        },
-      },
-      create: {
-        familyId: account.user.familyId,
-        title: item.summary || "(untitled event)",
-        description: item.description ?? undefined,
-        location: item.location ?? undefined,
-        startAt: new Date(start),
-        endAt: new Date(end),
-        allDay,
-        source: "GOOGLE",
-        sourceUserId: userId,
-        sourceEventId: item.id,
-      },
-      update: {
-        title: item.summary || "(untitled event)",
-        description: item.description ?? undefined,
-        location: item.location ?? undefined,
-        startAt: new Date(start),
-        endAt: new Date(end),
-        allDay,
-      },
-    });
-    synced += 1;
-  }
+  const result = await mergeGoogleEventsIntoFamilyCalendar({
+    familyId: account.user.familyId,
+    userId,
+    timeMin,
+    items: res.data.items ?? [],
+  });
 
   await prisma.googleAccount.update({
     where: { id: account.id },
     data: { lastSyncedAt: new Date() },
   });
 
-  return { synced };
+  return result;
 }
 
 export async function fetchRecentGmail(userId: string, max = 5) {
