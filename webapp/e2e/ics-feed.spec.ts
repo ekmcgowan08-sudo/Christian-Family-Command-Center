@@ -101,4 +101,58 @@ test.describe("the .ics calendar feed", () => {
     const badRes = await request.get(`${BASE_URL}/api/feed/not-a-real-token.ics`);
     expect(badRes.status()).toBe(404);
   });
+
+  test("the feed excludes events older than its 90-day past window, but keeps recent and future ones", async ({
+    page,
+    request,
+  }) => {
+    const email = uniqueEmail("ics-window");
+    await signupNewFamily(page, {
+      familyName: "The Windowed",
+      name: "Win Dowed",
+      email,
+      password: "supersecret123",
+    });
+    const family = await prisma.family.findFirstOrThrow({ where: { name: "The Windowed" } });
+
+    // Without a bound, every event ever added would be re-sent on every
+    // single poll from every phone, forever -- a family's feed would
+    // otherwise grow without limit over years of use. Confirms the bound
+    // exists and sits in the right place, not just that *some* filtering
+    // happens.
+    await prisma.calendarEvent.create({
+      data: {
+        familyId: family.id,
+        title: "Ancient history",
+        startAt: new Date(Date.now() - 100 * 86400000), // 100 days ago
+        endAt: new Date(Date.now() - 100 * 86400000 + 3600000),
+        source: "MANUAL",
+      },
+    });
+    await prisma.calendarEvent.create({
+      data: {
+        familyId: family.id,
+        title: "Within the window",
+        startAt: new Date(Date.now() - 10 * 86400000), // 10 days ago
+        endAt: new Date(Date.now() - 10 * 86400000 + 3600000),
+        source: "MANUAL",
+      },
+    });
+    await prisma.calendarEvent.create({
+      data: {
+        familyId: family.id,
+        title: "Far future",
+        startAt: new Date(Date.now() + 365 * 86400000), // a year out
+        endAt: new Date(Date.now() + 365 * 86400000 + 3600000),
+        source: "MANUAL",
+      },
+    });
+
+    const res = await request.get(`${BASE_URL}/api/feed/${family.icsToken}.ics`);
+    const ics = await res.text();
+
+    expect(ics).not.toContain("Ancient history");
+    expect(ics).toContain("Within the window");
+    expect(ics).toContain("Far future");
+  });
 });

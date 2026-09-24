@@ -1897,3 +1897,38 @@ Fixed the four existing tests that filled the datetime-local inputs by
 their old `name` attribute (now moved to the paired hidden input) to
 target `[data-testid="startAt"/"endAt"]` on the visible input instead.
 Full 37-test e2e suite passes together.
+
+## 2026-09-24 — Follow-up sweep after the timezone fix, and an unbounded feed
+
+Grepped the whole app for `datetime-local` and any other naive
+date-string parsing of user input, to check whether the timezone bug
+just fixed had any siblings. It doesn't: the calendar add/edit forms
+were the only two places a `datetime-local` input exists anywhere in
+the app, and both are now fixed. `src/proxy.ts` and the remaining
+routes/pages were also reviewed for the earlier round of this audit --
+route protection is correctly layered (proxy.ts guards `/dashboard/*`,
+every other route that needs auth checks it itself, every Google
+account action scopes strictly to the caller's own session-derived
+`userId`) and turned up nothing further.
+
+**A real, if lower-stakes, finding while re-reading `ics.ts`**:
+`buildFamilyIcsFeed` fetched *every* event a family had ever had, with
+no date bound at all, and rebuilt the full `.ics` file from that on
+every single request -- and a subscribed webcal feed is something
+phones poll repeatedly (commonly every few hours), not a one-time
+fetch. Over years of real use this grows without limit, and the app
+already has a product precedent that unbounded history isn't meant to
+be exposed here: the calendar page's own "Recently past" section caps
+itself to the last 10 events. The feed had no equivalent bound.
+
+**Fix**: added a 90-day past floor (`FEED_PAST_WINDOW_MS`) to the
+feed's query -- generous headroom over the "last 10" the calendar page
+itself shows, while keeping the feed's size from growing forever. The
+future side stays unbounded, since how far ahead a family schedules is
+naturally self-limiting.
+
+**Verified**: typecheck, lint, and build all clean. Added a test
+confirming an event 100 days in the past is excluded from the feed
+while one 10 days in the past and one a year in the future both remain
+-- checking the bound sits in the right place, not just that some
+filtering exists. Full 38-test e2e suite passes together.

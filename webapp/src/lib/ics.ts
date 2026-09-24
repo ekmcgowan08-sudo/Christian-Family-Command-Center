@@ -26,13 +26,21 @@ function addUtcDays(d: Date, days: number): Date {
   return copy;
 }
 
-/** Builds an .ics feed of every event on a family's shared calendar. */
+// How far back the feed reaches -- unbounded going forward (future
+// scheduling is naturally self-limiting), but with no floor at all a
+// family's feed would grow forever, re-sent in full to every phone on
+// every poll. 90 days comfortably covers the "Recently past" section
+// shown on the calendar page (capped there to the 10 most recent) with
+// room to spare, while keeping the feed's size bounded over years of use.
+const FEED_PAST_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Builds an .ics feed of a family's shared calendar (past 90 days onward). */
 export async function buildFamilyIcsFeed(icsToken: string): Promise<string | null> {
   const family = await prisma.family.findUnique({ where: { icsToken } });
   if (!family) return null;
 
   const events = await prisma.calendarEvent.findMany({
-    where: { familyId: family.id },
+    where: { familyId: family.id, startAt: { gte: new Date(Date.now() - FEED_PAST_WINDOW_MS) } },
     orderBy: { startAt: "asc" },
   });
 
