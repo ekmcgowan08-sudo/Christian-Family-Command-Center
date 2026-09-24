@@ -1798,3 +1798,102 @@ against the code with the prune step removed (exactly the two bugs
 being fixed) and pass with it restored. Full 36-test e2e suite passes
 together, including the existing Google-sync-failure test, confirming
 the refactor didn't change the error-handling path.
+
+## 2026-09-24 — Every calendar event's time was wrong unless the server happened to share the family's timezone
+
+Auditing `src/proxy.ts` and the remaining routes/pages turned up
+nothing (route protection is correctly layered -- proxy.ts guards
+`/dashboard/*`, every API route not meant to be public checks `auth()`
+itself, every dashboard page double-checks server-side, and every
+Google-account action scopes strictly to the caller's own session-
+derived `userId` with no client-suppliable id to manipulate). But
+reading `add-event-form.tsx` and `ics.ts` together surfaced a much
+bigger, previously-unnoticed correctness bug in how the app handles
+time itself -- arguably the most impactful bug found this session,
+since it silently affected essentially every calendar event, in any
+deployment where the server's timezone isn't the same as the family's.
+
+**The bug**: `<input type="datetime-local">` (used for a new event's
+start/end, and for editing one) produces a naive string with *no*
+timezone info -- e.g. `"2024-01-15T14:30"`, meaning "2:30 PM" in
+whatever timezone the person typing it is actually in. That string was
+sent as-is to `createEvent`/`updateEvent` (Next.js Server Actions,
+which execute on the server) and parsed with `new Date(startAt)`.
+Per the JS spec, a date-time string with no offset is interpreted in
+whatever timezone the *executing* environment is in -- here, the
+server's, not the browser's. Confirmed directly in this sandbox
+(`node -e "new Date('2024-01-15T23:00').toISOString()"` → exactly
+`23:00:00.000Z`, since this sandbox's server is UTC): any family not
+actually in UTC would have every event stored shifted by the gap
+between the server's timezone and their own.
+
+That alone might have been invisible -- `event-item.tsx`/
+`calendar/page.tsx` formatted times the same way in reverse
+(`toLocaleString` with no explicit `timeZone`, executed server-side in
+a Server Component, so also ambient-server-timezone), meaning the *web
+dashboard* would round-trip back to the same wall-clock numbers a user
+typed, masking the bug on the very page most likely to be checked.
+But `ics.ts` builds the `.ics` feed with explicit UTC markers
+(`startInputType: "utc"`), which is what a phone's calendar app
+correctly reads at face value. So a phone set to the family's real
+timezone would show every synced event at the *wrong* local time,
+offset by the server/family timezone gap -- while the web dashboard,
+checked by the same person, looked completely correct. Given the
+phone-sync feed is one of this app's headline features, and most cloud
+hosts (Vercel/Railway/Render) default their Node runtime to UTC while
+most families are not in UTC, this was a real, live, high-reach bug in
+typical deployments, not a sandbox-only artifact.
+
+**Fix, storage side**: `add-event-form.tsx` and `event-item.tsx`'s edit
+form no longer submit the raw datetime-local string. Each visible input
+is now controlled and unnamed; a same-named hidden input carries
+`localInputValueToUtcIso(value)` -- `new Date(value).toISOString()`
+computed in the *browser*, where `new Date` correctly resolves a naive
+string using the browser's real local timezone. The server then parses
+an unambiguous `Z`-suffixed ISO string, correct regardless of where the
+server itself happens to run.
+
+**Fix, display side**: fixing storage alone would have flipped the bug
+(phone correct, web wrong), since `calendar/page.tsx`'s "Recently past"
+list and `dashboard/page.tsx`'s upcoming list format dates directly in
+a Server Component -- no client-side re-render ever corrects them.
+(`EventItem`'s own list was already a `"use client"` component, so
+React's hydration text-reconciliation was already quietly repainting
+it correctly a moment after load -- real, but easy to miss and worth
+making deliberate rather than accidental.) Added `LocalDateTime`
+(`src/components/local-date-time.tsx`) and `EventRangeLabel`
+(colocated with the calendar page) -- small client components that
+render nothing during the server pass and format the real value after
+mount, using `useSyncExternalStore` for the client/server split (the
+project's ESLint config flags `setState` inside a plain `useEffect` as
+a rule, `react-hooks/set-state-in-effect`, so this uses the pattern
+React's own docs recommend for exactly this "value must differ between
+server and client" case instead). Every date/time display for calendar
+events now renders in the *viewer's own* browser timezone, which is
+actually more correct than a single "family timezone" would be --
+different members traveling see their own local time.
+
+Two lower-stakes date displays with the same ambient-server-timezone
+shape (an invite's expiry date in `family/page.tsx`, a Google account's
+last-synced timestamp in `integrations/page.tsx`) were deliberately
+left alone: worst case is a date landing a few hours off near a
+midnight boundary, not a systematically wrong *time* for a scheduled
+event, and touching every date display in the app would have diluted
+focus on the actually load-bearing bug. Noted here rather than fixed
+silently.
+
+**Verified**: typecheck, lint, and build all clean. Added
+`e2e/calendar.spec.ts`'s new "non-UTC timezone" test, which opens a
+dedicated browser context with `timezoneId: "America/New_York"`
+(simulating a family in Eastern time against this sandbox's UTC
+server -- the exact mismatch the bug needed) and confirms an event
+entered as "2:30 PM" ends up stored as `2030-06-01T18:30:00.000Z`
+*and* fed back out through the real `.ics` endpoint as
+`DTSTART:20300601T183000Z`. Deliberately ran it against the unfixed
+conversion first and watched it fail with exactly the predicted
+symptom -- `14:30:00.000Z` instead of `18:30:00.000Z`, precisely the
+4-hour EDT offset -- then confirmed it passes with the fix restored.
+Fixed the four existing tests that filled the datetime-local inputs by
+their old `name` attribute (now moved to the paired hidden input) to
+target `[data-testid="startAt"/"endAt"]` on the visible input instead.
+Full 37-test e2e suite passes together.

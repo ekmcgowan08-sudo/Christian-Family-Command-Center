@@ -37,8 +37,8 @@ test.describe("leaving and deleting a family", () => {
     await memberPage.goto("/dashboard/calendar");
     const eventTitle = `Survives leaving ${Date.now()}`;
     await memberPage.fill('input[name="title"]', eventTitle);
-    await memberPage.fill('input[name="startAt"]', "2030-06-01T09:00");
-    await memberPage.fill('input[name="endAt"]', "2030-06-01T10:00");
+    await memberPage.fill('[data-testid="startAt"]', "2030-06-01T09:00");
+    await memberPage.fill('[data-testid="endAt"]', "2030-06-01T10:00");
     await memberPage.click('button:has-text("Add to family calendar")');
     await expect(memberPage.getByText(eventTitle)).toBeVisible();
 

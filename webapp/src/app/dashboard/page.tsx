@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { LocalDateTime } from "@/components/local-date-time";
 
 export default async function DashboardHomePage() {
   const session = await auth();
@@ -72,17 +73,14 @@ export default async function DashboardHomePage() {
                   )}
                 </div>
                 <p className="text-sm text-foreground/70">
-                  {event.allDay
-                    ? event.startAt.toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                      })
-                    : event.startAt.toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                  <LocalDateTime
+                    date={event.startAt}
+                    options={
+                      event.allDay
+                        ? { month: "short", day: "numeric" }
+                        : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }
+                    }
+                  />
                 </p>
               </li>
             ))}

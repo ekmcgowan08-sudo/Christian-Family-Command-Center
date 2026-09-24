@@ -2,26 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AddEventForm } from "./add-event-form";
 import { EventItem } from "./event-item";
-
-function formatRange(start: Date, end: Date, allDay: boolean) {
-  if (allDay) {
-    return start.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  }
-  const dateOpts: Intl.DateTimeFormatOptions = {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  };
-  const timeOpts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  return `${start.toLocaleDateString(undefined, dateOpts)} · ${start.toLocaleTimeString(
-    undefined,
-    timeOpts
-  )} - ${end.toLocaleTimeString(undefined, timeOpts)}`;
-}
+import { EventRangeLabel } from "./event-range-label";
 
 export default async function CalendarPage() {
   const session = await auth();
@@ -76,7 +57,8 @@ export default async function CalendarPage() {
                 className="rounded-xl border border-brand-border bg-brand-card/60 px-4 py-3 text-sm text-foreground/60"
               >
                 <span className="font-medium text-foreground/80">{event.title}</span>{" "}
-                &middot; {formatRange(event.startAt, event.endAt, event.allDay)}
+                &middot;{" "}
+                <EventRangeLabel start={event.startAt} end={event.endAt} allDay={event.allDay} />
               </li>
             ))}
           </ul>

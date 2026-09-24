@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { deleteEvent, updateEvent } from "@/lib/actions/calendar";
+import { localInputValueToUtcIso } from "@/lib/datetime";
+import { EventRangeLabel } from "./event-range-label";
 
 type EventItemProps = {
   event: {
@@ -17,26 +19,6 @@ type EventItemProps = {
   };
 };
 
-function formatRange(start: Date, end: Date, allDay: boolean) {
-  if (allDay) {
-    return start.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  }
-  const dateOpts: Intl.DateTimeFormatOptions = {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  };
-  const timeOpts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  return `${start.toLocaleDateString(undefined, dateOpts)} · ${start.toLocaleTimeString(
-    undefined,
-    timeOpts
-  )} - ${end.toLocaleTimeString(undefined, timeOpts)}`;
-}
-
 // Formats a Date for a <input type="datetime-local"> value in local time.
 function toLocalInputValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -48,6 +30,8 @@ function toLocalInputValue(d: Date) {
 export function EventItem({ event }: EventItemProps) {
   const [editing, setEditing] = useState(false);
   const [state, formAction, pending] = useActionState(updateEvent, null);
+  const [startAt, setStartAt] = useState(() => toLocalInputValue(event.startAt));
+  const [endAt, setEndAt] = useState(() => toLocalInputValue(event.endAt));
 
   // Close the edit form the moment a save succeeds. Adjusting state during
   // render (rather than in a useEffect) avoids the extra commit-then-effect
@@ -76,21 +60,28 @@ export function EventItem({ event }: EventItemProps) {
             <label className="block text-sm font-medium">Starts</label>
             <input
               type="datetime-local"
-              name="startAt"
               required
-              defaultValue={toLocalInputValue(event.startAt)}
+              data-testid="startAt"
+              value={startAt}
+              onChange={(e) => setStartAt(e.target.value)}
               className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2 text-sm outline-none focus:border-brand-green"
             />
+            {/* Unnamed on purpose -- see the matching comment in
+                AddEventForm. The hidden input below carries the real UTC
+                instant, computed in the browser. */}
+            <input type="hidden" name="startAt" value={localInputValueToUtcIso(startAt)} />
           </div>
           <div>
             <label className="block text-sm font-medium">Ends</label>
             <input
               type="datetime-local"
-              name="endAt"
               required
-              defaultValue={toLocalInputValue(event.endAt)}
+              data-testid="endAt"
+              value={endAt}
+              onChange={(e) => setEndAt(e.target.value)}
               className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2 text-sm outline-none focus:border-brand-green"
             />
+            <input type="hidden" name="endAt" value={localInputValueToUtcIso(endAt)} />
           </div>
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium">Location (optional)</label>
@@ -151,7 +142,7 @@ export function EventItem({ event }: EventItemProps) {
       <div>
         <p className="font-medium">{event.title}</p>
         <p className="text-sm text-foreground/70">
-          {formatRange(event.startAt, event.endAt, event.allDay)}
+          <EventRangeLabel start={event.startAt} end={event.endAt} allDay={event.allDay} />
         </p>
         {event.location && <p className="text-xs text-foreground/60">{event.location}</p>}
         {event.description && (
